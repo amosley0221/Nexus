@@ -176,6 +176,21 @@ class NexusLauncherActivity : FragmentActivity() {
         return resolved?.activityInfo?.packageName == packageName
     }
 
+    /**
+     * The window token the overlay parents itself to only exists once the window
+     * is attached. Attaching here rather than waiting for onResume is why the
+     * feed is ready on the first swipe instead of after a trip through recents.
+     */
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        (application as NexusApp).discoverOverlay.attachWindow(this)
+    }
+
+    override fun onDetachedFromWindow() {
+        (application as NexusApp).discoverOverlay.detachWindow(isChangingConfigurations)
+        super.onDetachedFromWindow()
+    }
+
     override fun onStart() {
         super.onStart()
         val overlay = (application as NexusApp).discoverOverlay

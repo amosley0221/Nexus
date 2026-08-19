@@ -110,6 +110,20 @@ fun LauncherScreen(
                 if (scrolling) discoverOverlay.startScroll() else discoverOverlay.endScroll()
             }
         }
+
+        // Landing on Discover any other way than a drag — a page-jump, a BACK,
+        // or simply starting there — produces no scroll for the Google app to
+        // follow, so it would sit closed behind a blank page. Tell it directly.
+        LaunchedEffect(pagerState, discoverState.isUsable, discoverIndex) {
+            if (!discoverState.isUsable) return@LaunchedEffect
+            snapshotFlow { pagerState.settledPage }.collect { settled ->
+                if (settled == discoverIndex) {
+                    discoverOverlay.openOverlay()
+                } else {
+                    discoverOverlay.closeOverlay()
+                }
+            }
+        }
     }
 
     // Pages arrive from DataStore a beat after first composition, so the pager

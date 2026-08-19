@@ -58,6 +58,15 @@ fun DiscoverPage(
     onStoryClick: (DiscoverStory) -> Unit,
     onCompanionInfo: () -> Unit,
 ) {
+    if (overlayUsable) {
+        // The Google app renders the feed into its own window, parented to the
+        // launcher window and drawn *behind* it. So this page must paint
+        // nothing at all — no background, no header, not even the title. Any
+        // opaque pixel here covers the feed and the page reads as blank.
+        Box(modifier = modifier.fillMaxSize())
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -102,12 +111,6 @@ fun DiscoverPage(
         }
 
         Spacer(Modifier.height(16.dp))
-
-        if (overlayUsable) {
-            // The Google app draws its feed into its own window over this page,
-            // so the page itself stays deliberately empty behind it.
-            return@Column
-        }
 
         Box(
             modifier = Modifier
