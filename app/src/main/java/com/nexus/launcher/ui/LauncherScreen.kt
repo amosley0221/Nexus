@@ -78,6 +78,16 @@ fun LauncherScreen(
         pageCount = { activePages.size.coerceAtLeast(1) },
     )
 
+    // Pages arrive from DataStore a beat after first composition, so the pager
+    // starts on index 0. Settle it on Home once the real list is in.
+    var settledOnHome by remember { mutableStateOf(false) }
+    LaunchedEffect(activePages.size) {
+        if (!settledOnHome && activePages.isNotEmpty()) {
+            settledOnHome = true
+            pagerState.scrollToPage(homeIndex)
+        }
+    }
+
     // HOME press returns to the Home page rather than exiting.
     LaunchedEffect(host.homePressCount) {
         if (host.homePressCount > 0) {
