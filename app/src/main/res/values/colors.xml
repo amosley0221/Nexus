@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="nexus_accent">#f6b1a4</color>
+    <color name="nexus_hub_bg">#0c0e14</color>
+    <color name="nexus_icon_bg">#f6b3a6</color>
+    <color name="nexus_glyph">#8c2320</color>
+</resources>
