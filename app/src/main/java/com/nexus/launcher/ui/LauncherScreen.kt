@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -33,12 +34,14 @@ import com.nexus.launcher.domain.AppEntry
 import com.nexus.launcher.domain.NotificationCard
 import com.nexus.launcher.domain.PageKind
 import com.nexus.launcher.domain.RomEntry
+import com.nexus.launcher.NexusApp
 import com.nexus.launcher.integration.notifications.NexusNotificationListener
 import com.nexus.launcher.ui.home.HomePage
 import com.nexus.launcher.ui.home.NotificationsOverscroll
 import com.nexus.launcher.ui.home.PageJump
 import com.nexus.launcher.ui.home.SearchOverscroll
 import com.nexus.launcher.ui.theme.NexusColor
+import kotlin.math.absoluteValue
 import kotlinx.coroutines.launch
 
 /** Which full-screen overlay, if any, is on top of the pager. */
@@ -77,6 +80,37 @@ fun LauncherScreen(
         initialPage = homeIndex,
         pageCount = { activePages.size.coerceAtLeast(1) },
     )
+
+    // Drive the Google Discover overlay from the pager. The overlay is drawn by
+    // the Google app into its own window, so the launcher only reports how far
+    // the user has swiped toward the Discover page; a page-1 (Home) offset of
+    // 0 means fully open and 1 means fully hidden.
+    val discoverIndex = remember(activePages) {
+        activePages.indexOfFirst { it.kind == PageKind.Discover }
+    }
+    if (discoverIndex >= 0) {
+        val overlay = remember(context) {
+            (context.applicationContext as NexusApp).discoverOverlay
+        }
+        val overlayState by overlay.state.collectAsStateWithLifecycle()
+
+        LaunchedEffect(pagerState, overlayState.isUsable, discoverIndex) {
+            if (!overlayState.isUsable) return@LaunchedEffect
+            snapshotFlow {
+                // Distance from the Discover page, clamped to the one-page
+                // window either side of it.
+                val position = pagerState.currentPage + pagerState.currentPageOffsetFraction
+                (1f - (position - discoverIndex).absoluteValue).coerceIn(0f, 1f)
+            }.collect { progress -> overlay.onScroll(progress) }
+        }
+
+        LaunchedEffect(pagerState, overlayState.isUsable) {
+            if (!overlayState.isUsable) return@LaunchedEffect
+            snapshotFlow { pagerState.isScrollInProgress }.collect { scrolling ->
+                if (scrolling) overlay.startScroll() else overlay.endScroll()
+            }
+        }
+    }
 
     // Pages arrive from DataStore a beat after first composition, so the pager
     // starts on index 0. Settle it on Home once the real list is in.

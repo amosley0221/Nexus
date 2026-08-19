@@ -26,7 +26,7 @@ jobs:
       - name: Build debug APK
         run: |
           set +e
-          ./gradlew :app:assembleDebug 2>&1 | tee build.log
+          ./gradlew :app:assembleDebug :companion:assembleDebug 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             echo "===== COMPILER DIAGNOSTICS ====="
@@ -35,14 +35,18 @@ jobs:
           fi
           exit $status
 
-      - name: Rename APK
+      - name: Collect APKs
         run: |
           mkdir -p out
           cp app/build/outputs/apk/debug/app-debug.apk "out/Nexus-debug.apk"
+          cp companion/build/outputs/apk/debug/companion-debug.apk "out/NexusCompanion-debug.apk"
+          ls -la out
 
-      - name: Upload APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
+          # Both APKs ship together: the bridge between them is
+          # signature-checked, so a mismatched pair will not connect.
           name: Nexus-debug-apk
-          path: out/Nexus-debug.apk
+          path: out/*.apk
           if-no-files-found: error

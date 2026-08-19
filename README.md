@@ -16,8 +16,13 @@ CI.
 1. Open the [Actions tab](../../actions/workflows/build-apk.yml)
 2. Click the most recent green run for your branch
 3. Download the **Nexus-debug-apk** artifact and unzip it
-4. Copy `Nexus-debug.apk` to the phone and install it (allow installs from your
-   file manager when prompted)
+4. The artifact holds two APKs — copy both to the phone and install them
+   (allow installs from your file manager when prompted):
+   - `Nexus-debug.apk` — the launcher
+   - `NexusCompanion-debug.apk` — the Discover feed bridge (optional)
+
+   Install both from the **same** build. The bridge between them is
+   signature-checked, so a mismatched pair will not connect.
 
 To build locally instead, with Android Studio or a configured SDK:
 
@@ -70,9 +75,26 @@ These render their real UI with an empty state until you add credentials in
 Streaming apps (Netflix, Disney+, Prime) and Apple Music are deep links by
 design — neither platform exposes a library API to third-party launchers.
 
-**Google Discover** needs a separately-signed companion APK that speaks the
-`LauncherClient` overlay protocol; it cannot ship inside this APK. Until one is
-installed the page says so, and it can be hidden entirely in settings.
+### Google Discover
+
+The `:companion` module builds `NexusCompanion-debug.apk`, which implements the
+`LauncherClient` overlay protocol — the same approach Lawnchair's Lawnfeed and
+the other open-source companions take. It binds the Google app's
+`com.android.launcher3.WINDOW_OVERLAY` service and re-exports it to Nexus over a
+signature-guarded AIDL bridge, so the launcher can hand over its window token and
+drive the feed's scroll from the pager.
+
+It lives in a second APK because the Google app decides whether to serve the
+overlay from the **calling package** — a launcher that binds the service directly
+is refused.
+
+**The honest caveat:** Google only serves that overlay to companion packages it
+recognises, and a self-signed build is not one of them. Expect the Google app to
+return no binding; the companion reports exactly that on its status screen and
+the Discover page shows the reason rather than a blank feed. Every piece on the
+Nexus side is wired and will light up if the Google app accepts the package, but
+that acceptance is Google's to give — it is not something the code can force.
+The page can be hidden entirely in *Nexus Settings → Apps*.
 
 ## Responsive behaviour
 

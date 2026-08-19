@@ -118,21 +118,44 @@ class NexusLauncherActivity : FragmentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        val overlay = (application as NexusApp).discoverOverlay
+        overlay.connect()
+        overlay.onActivityStarted()
+    }
+
     override fun onResume() {
         super.onResume()
-        (application as NexusApp).nowPlaying.start()
-        (application as NexusApp).widgetHost.startListening()
+        val app = application as NexusApp
+        app.nowPlaying.start()
+        app.widgetHost.startListening()
         viewModel.refreshApps()
+
+        // The window token only exists once the window is attached, so the
+        // overlay attach happens here rather than in onCreate.
+        app.discoverOverlay.attachWindow(this)
+        app.discoverOverlay.onActivityResumed()
     }
 
     override fun onPause() {
         super.onPause()
-        (application as NexusApp).widgetHost.stopListening()
+        val app = application as NexusApp
+        app.widgetHost.stopListening()
+        app.discoverOverlay.onActivityPaused()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        (application as NexusApp).discoverOverlay.onActivityStopped()
     }
 
     override fun onDestroy() {
+        val app = application as NexusApp
+        app.discoverOverlay.detachWindow(isChangingConfigurations)
+        app.discoverOverlay.disconnect()
         super.onDestroy()
-        (application as NexusApp).nowPlaying.stop()
+        app.nowPlaying.stop()
     }
 
     /**

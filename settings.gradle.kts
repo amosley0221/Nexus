@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Nexus"
 include(":app")
+include(":companion")

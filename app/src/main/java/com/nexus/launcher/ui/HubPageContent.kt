@@ -110,10 +110,23 @@ fun HubPageContent(
         }
 
         PageKind.Discover -> {
+            val overlay = remember(context) {
+                (context.applicationContext as NexusApp).discoverOverlay
+            }
+            val overlayState by overlay.state.collectAsStateWithLifecycle()
+
             DiscoverPage(
                 stories = emptyList<DiscoverStory>(),
                 chips = emptyList<DiscoverChip>(),
-                companionInstalled = false,
+                overlayUsable = overlayState.isUsable,
+                statusTitle = when {
+                    !overlayState.companionInstalled -> "Nexus Companion not installed"
+                    !overlayState.bridgeBound -> "Companion not responding"
+                    else -> "Google feed unavailable"
+                },
+                statusDetail = overlayState.unavailableReason
+                    ?: "Google's Discover feed comes from the companion APK that " +
+                    "ships alongside Nexus. You can also hide this page in Nexus Settings.",
                 modifier = modifier,
                 onStoryClick = { host.openDeepLink(it.url) },
                 onCompanionInfo = { host.openSettings() },

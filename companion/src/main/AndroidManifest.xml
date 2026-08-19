@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Signature-level: only an app signed with the same key as this companion
+      may bind the overlay service. Nexus and the companion are built and
+      signed together, so the launcher qualifies and nothing else does.
+    -->
+    <permission
+        android:name="com.nexus.companion.permission.BIND_OVERLAY"
+        android:protectionLevel="signature" />
+
+    <queries>
+        <package android:name="com.google.android.googlequicksearchbox" />
+        <package android:name="com.nexus.launcher" />
+        <intent>
+            <action android:name="com.android.launcher3.WINDOW_OVERLAY" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.NexusCompanion">
+
+        <activity
+            android:name=".CompanionActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".NexusOverlayService"
+            android:exported="true"
+            android:permission="com.nexus.companion.permission.BIND_OVERLAY">
+            <intent-filter>
+                <action android:name="com.nexus.companion.OVERLAY_BRIDGE" />
+            </intent-filter>
+        </service>
+
+    </application>
+</manifest>

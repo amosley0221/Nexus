@@ -51,7 +51,9 @@ data class DiscoverChip(val label: String, val value: String)
 fun DiscoverPage(
     stories: List<DiscoverStory>,
     chips: List<DiscoverChip>,
-    companionInstalled: Boolean,
+    overlayUsable: Boolean,
+    statusTitle: String,
+    statusDetail: String,
     modifier: Modifier = Modifier,
     onStoryClick: (DiscoverStory) -> Unit,
     onCompanionInfo: () -> Unit,
@@ -101,33 +103,37 @@ fun DiscoverPage(
 
         Spacer(Modifier.height(16.dp))
 
-        if (!companionInstalled) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(NexusRadius.Card))
-                    .background(NexusColor.DiscoverCard)
-                    .border(1.dp, NexusColor.DiscoverBorder, RoundedCornerShape(NexusRadius.Card))
-                    .clickable(onClick = onCompanionInfo)
-                    .padding(14.dp),
-            ) {
-                Column {
-                    Text(
-                        text = "Nexus Companion not installed",
-                        style = NexusType.CardTitle,
-                        color = NexusColor.TextPrimary,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Google's Discover feed needs the sideloaded companion APK. " +
-                            "You can also hide this page in Nexus Settings.",
-                        style = NexusType.Meta,
-                        color = NexusColor.TextSecondary,
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
+        if (overlayUsable) {
+            // The Google app draws its feed into its own window over this page,
+            // so the page itself stays deliberately empty behind it.
+            return@Column
         }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(NexusRadius.Card))
+                .background(NexusColor.DiscoverCard)
+                .border(1.dp, NexusColor.DiscoverBorder, RoundedCornerShape(NexusRadius.Card))
+                .clickable(onClick = onCompanionInfo)
+                .padding(14.dp),
+        ) {
+            Column {
+                Text(
+                    text = statusTitle,
+                    style = NexusType.CardTitle,
+                    color = NexusColor.TextPrimary,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = statusDetail,
+                    style = NexusType.Meta,
+                    color = NexusColor.TextSecondary,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
 
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(12.dp),
