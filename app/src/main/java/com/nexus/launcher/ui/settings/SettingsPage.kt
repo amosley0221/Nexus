@@ -190,6 +190,14 @@ fun SettingsPage(
             }
             item {
                 ToggleRow(
+                    title = "Weather on Home",
+                    subtitle = "Conditions beside the date · uses coarse location",
+                    checked = settings.showWeather,
+                    onCheckedChange = { value -> onUpdate { it.copy(showWeather = value) } },
+                )
+            }
+            item {
+                ToggleRow(
                     title = "Claude status on Home",
                     subtitle = "Hidden automatically when nothing is running",
                     checked = settings.showClaudeStatus,

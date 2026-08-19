@@ -44,8 +44,12 @@ import kotlin.math.roundToInt
  */
 const val STAR_LETTER: Char = '\u2606'
 
-/** Sections the strip can show, in display order. */
-val AZ_LETTERS: List<Char> = listOf(STAR_LETTER) + ('A'..'Z').toList() + '#'
+/**
+ * Sections the strip can show, in display order. '#' sits above 'A' because
+ * that is where its apps are: a label starting with a digit sorts ahead of
+ * every letter, so the numeric section is the top of the list, not the bottom.
+ */
+val AZ_LETTERS: List<Char> = listOf(STAR_LETTER, '#') + ('A'..'Z').toList()
 
 /**
  * State shared between the A–Z strip and the favourites list: which letter the

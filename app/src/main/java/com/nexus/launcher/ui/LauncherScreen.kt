@@ -38,6 +38,7 @@ import com.nexus.launcher.domain.PageKind
 import com.nexus.launcher.domain.RomEntry
 import com.nexus.launcher.NexusApp
 import com.nexus.launcher.integration.notifications.NexusNotificationListener
+import com.nexus.launcher.integration.weather.WeatherNow
 import com.nexus.launcher.ui.clock.ClockText
 import com.nexus.launcher.ui.home.HomePage
 import com.nexus.launcher.ui.home.NotificationsOverscroll
@@ -72,6 +73,7 @@ enum class Overlay { None, Search, Notifications }
 fun LauncherScreen(
     viewModel: LauncherViewModel,
     clock: ClockText,
+    weather: WeatherNow?,
     host: LauncherHost,
     modifier: Modifier = Modifier,
 ) {
@@ -80,7 +82,9 @@ fun LauncherScreen(
 
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val activePages by viewModel.activePages.collectAsStateWithLifecycle()
-    val apps by viewModel.visibleApps.collectAsStateWithLifecycle()
+    // The A-Z run, minus anything filed in a folder.
+    val apps by viewModel.listedApps.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
@@ -241,12 +245,17 @@ fun LauncherScreen(
                     HomePage(
                         apps = apps,
                         favorites = favorites,
+                        folders = folders,
                         settings = settings,
                         clock = clock,
+                        // The reading is fetched regardless; the setting
+                        // decides whether Home shows it.
+                        weather = weather.takeIf { settings.showWeather },
                         resetToken = homeResetToken,
                         claudeLine = host.claudeLine,
                         onLaunch = { entry, bounds -> host.launchApp(entry, bounds) },
                         onLongPressApp = { host.openAppOptions(it) },
+                        onOpenFolder = { host.openFolder(it.id) },
                         onClaudeClick = { host.openClaudeFeed() },
                         onClockClick = { host.openClock() },
                         modifier = Modifier
@@ -331,6 +340,7 @@ interface LauncherHost {
 
     fun launchApp(entry: AppEntry, bounds: androidx.compose.ui.geometry.Rect?)
     fun openAppOptions(entry: AppEntry)
+    fun openFolder(folderId: String)
     fun openEditMode()
     fun openSettings()
     fun openClaudeFeed()

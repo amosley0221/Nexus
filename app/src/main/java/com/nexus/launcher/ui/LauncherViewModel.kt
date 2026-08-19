@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.nexus.launcher.NexusApp
 import com.nexus.launcher.data.NexusSettings
 import com.nexus.launcher.domain.AppEntry
+import com.nexus.launcher.domain.AppFolder
 import com.nexus.launcher.domain.BudgetState
+import com.nexus.launcher.domain.FolderContents
 import com.nexus.launcher.domain.PageConfig
 import com.nexus.launcher.domain.PageKind
 import com.nexus.launcher.domain.RomEntry
@@ -65,6 +67,27 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val favorites: StateFlow<List<AppEntry>> =
         combine(visibleApps, settings) { apps, config ->
             config.favorites.mapNotNull { key -> apps.firstOrNull { it.key == key } }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Folders with their members resolved, in the order the user made them. */
+    val folders: StateFlow<List<FolderContents>> =
+        combine(visibleApps, settings) { apps, config ->
+            config.folders.map { folder ->
+                FolderContents(
+                    folder = folder,
+                    apps = folder.appKeys.mapNotNull { key -> apps.firstOrNull { it.key == key } },
+                )
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * What the A-Z list shows: every visible app that is not filed in a folder.
+     * Leaving members in both places would defeat the point of filing them.
+     */
+    val listedApps: StateFlow<List<AppEntry>> =
+        combine(visibleApps, settings) { apps, config ->
+            val filed = config.folders.flatMapTo(HashSet()) { it.appKeys }
+            if (filed.isEmpty()) apps else apps.filterNot { it.key in filed }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val games: StateFlow<List<AppEntry>> =
@@ -153,6 +176,79 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val config = settings.value
         return config.appLockEnabled && entry.key in config.lockedApps
     }
+
+    // ---- Folders -----------------------------------------------------------
+
+    /** Creates a folder and files [seed] in it, returning nothing — the flow updates. */
+    fun createFolder(name: String, seed: AppEntry? = null) {
+        val trimmed = name.trim().ifEmpty { "Folder" }
+        updateSettings { config ->
+            config.copy(
+                folders = config.folders + AppFolder(
+                    id = UUID.randomUUID().toString(),
+                    name = trimmed,
+                    appKeys = listOfNotNull(seed?.key),
+                ),
+            )
+        }
+    }
+
+    fun addToFolder(folderId: String, entry: AppEntry) {
+        updateSettings { config ->
+            config.copy(
+                folders = config.folders.map { folder ->
+                    when {
+                        folder.id == folderId -> {
+                            if (entry.key in folder.appKeys) folder
+                            else folder.copy(appKeys = folder.appKeys + entry.key)
+                        }
+                        // An app belongs to one folder: filing it somewhere new
+                        // takes it out of where it was.
+                        entry.key in folder.appKeys ->
+                            folder.copy(appKeys = folder.appKeys - entry.key)
+                        else -> folder
+                    }
+                },
+            )
+        }
+    }
+
+    fun removeFromFolder(entry: AppEntry) {
+        updateSettings { config ->
+            config.copy(
+                folders = config.folders.map { folder ->
+                    if (entry.key in folder.appKeys) {
+                        folder.copy(appKeys = folder.appKeys - entry.key)
+                    } else {
+                        folder
+                    }
+                },
+            )
+        }
+    }
+
+    fun renameFolder(folderId: String, name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        updateSettings { config ->
+            config.copy(
+                folders = config.folders.map { folder ->
+                    if (folder.id == folderId) folder.copy(name = trimmed) else folder
+                },
+            )
+        }
+    }
+
+    /** Deleting a folder returns its apps to the A-Z list; it never uninstalls. */
+    fun deleteFolder(folderId: String) {
+        updateSettings { config ->
+            config.copy(folders = config.folders.filterNot { it.id == folderId })
+        }
+    }
+
+    /** The folder [entry] is filed in, if any. */
+    fun folderOf(entry: AppEntry): AppFolder? =
+        settings.value.folders.firstOrNull { entry.key in it.appKeys }
 
     // ---- Pages -------------------------------------------------------------
 

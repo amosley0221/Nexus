@@ -3,6 +3,7 @@ package com.nexus.launcher.ui.overlay
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -18,6 +19,8 @@ import com.nexus.launcher.integration.notifications.NexusNotificationListener
 import com.nexus.launcher.integration.widgets.NexusWidgetHost
 import com.nexus.launcher.ui.LauncherHost
 import com.nexus.launcher.ui.LauncherViewModel
+import com.nexus.launcher.ui.common.AddToCategorySheet
+import com.nexus.launcher.ui.common.FolderSheet
 import com.nexus.launcher.ui.common.OptionsSheet
 import com.nexus.launcher.ui.common.SheetAction
 import com.nexus.launcher.ui.edit.GalleryEntry
@@ -42,6 +45,8 @@ sealed interface OverlayRoute {
     data object Favorites : OverlayRoute
     data object ClaudeFeed : OverlayRoute
     data class AppOptions(val entry: AppEntry) : OverlayRoute
+    data class AddToCategory(val entry: AppEntry) : OverlayRoute
+    data class FolderContents(val folderId: String) : OverlayRoute
     data class RomOptions(val rom: RomEntry) : OverlayRoute
 }
 
@@ -277,6 +282,12 @@ fun LauncherOverlay(
                         viewModel.toggleFavorite(entry)
                         onClose()
                     },
+                    SheetAction(
+                        label = "Add to category",
+                        detail = "File it in a folder, or start a new one",
+                    ) {
+                        onRoute(OverlayRoute.AddToCategory(entry))
+                    },
                     SheetAction(label = if (isLocked) "Unlock app" else "Lock with fingerprint") {
                         viewModel.setLocked(entry, !isLocked)
                         onClose()
@@ -296,6 +307,58 @@ fun LauncherOverlay(
                 ),
                 onDismiss = onClose,
             )
+        }
+
+        is OverlayRoute.AddToCategory -> {
+            val entry = route.entry
+            val folders by viewModel.folders.collectAsStateWithLifecycle()
+
+            AddToCategorySheet(
+                entry = entry,
+                folders = folders,
+                settings = settings,
+                onAddTo = { folder ->
+                    viewModel.addToFolder(folder.id, entry)
+                    onClose()
+                },
+                onCreateFolder = { name ->
+                    viewModel.createFolder(name, seed = entry)
+                    onClose()
+                },
+                onRemoveFromFolder = {
+                    viewModel.removeFromFolder(entry)
+                    onClose()
+                },
+                onDismiss = onClose,
+            )
+        }
+
+        is OverlayRoute.FolderContents -> {
+            val folders by viewModel.folders.collectAsStateWithLifecycle()
+            val folder = folders.firstOrNull { it.id == route.folderId }
+
+            // The folder can vanish under the sheet — its last app removed, or
+            // the folder itself deleted from inside. Closing is the whole of the
+            // correct behaviour.
+            if (folder == null) {
+                LaunchedEffect(route.folderId) { onClose() }
+            } else {
+                FolderSheet(
+                    folder = folder,
+                    settings = settings,
+                    onLaunch = { entry ->
+                        onClose()
+                        host.launchApp(entry, null)
+                    },
+                    onLongPressApp = { entry -> onRoute(OverlayRoute.AppOptions(entry)) },
+                    onRename = { name -> viewModel.renameFolder(folder.id, name) },
+                    onDelete = {
+                        viewModel.deleteFolder(folder.id)
+                        onClose()
+                    },
+                    onDismiss = onClose,
+                )
+            }
         }
 
         is OverlayRoute.RomOptions -> {

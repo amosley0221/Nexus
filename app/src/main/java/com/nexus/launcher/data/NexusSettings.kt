@@ -1,5 +1,6 @@
 package com.nexus.launcher.data
 
+import com.nexus.launcher.domain.AppFolder
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -27,6 +28,8 @@ data class NexusSettings(
     val widgetsEnabled: Boolean = true,
     val discoverEnabled: Boolean = true,
     val maxHomeFavorites: Int = 10,
+    /** User-made groups. Members drop out of the A-Z run and live here instead. */
+    val folders: List<AppFolder> = emptyList(),
 
     // SECURITY
     val appLockEnabled: Boolean = false,
@@ -47,6 +50,8 @@ data class NexusSettings(
 
     // HOME
     val showClaudeStatus: Boolean = true,
+    /** Weather beside the date. Off until asked for — it needs coarse location. */
+    val showWeather: Boolean = false,
     val useBundledWallpaper: Boolean = false,
     /** Set once the default-home prompt has been answered either way. */
     val defaultLauncherPromptSeen: Boolean = false,

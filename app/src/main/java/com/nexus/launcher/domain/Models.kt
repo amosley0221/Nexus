@@ -39,6 +39,28 @@ data class AppShortcut(
     val icon: Drawable?,
 )
 
+/**
+ * A user-made group of apps. Its members leave the A-Z run and live in the
+ * folder instead, which is the point of making one — the list gets shorter.
+ * Folders sit at the end of the app list, after Z.
+ */
+@Serializable
+data class AppFolder(
+    val id: String,
+    val name: String,
+    val appKeys: List<String> = emptyList(),
+)
+
+/** A folder with its members resolved against the installed app list. */
+@Immutable
+data class FolderContents(
+    val folder: AppFolder,
+    val apps: List<AppEntry>,
+) {
+    val id: String get() = folder.id
+    val name: String get() = folder.name
+}
+
 /** The pages the pager can show, in their default left-to-right order. */
 @Serializable
 enum class PageKind {

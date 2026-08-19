@@ -7,6 +7,7 @@ import com.nexus.launcher.integration.apps.WallpaperSource
 import com.nexus.launcher.integration.claude.ClaudeBridge
 import com.nexus.launcher.integration.discover.DiscoverOverlayController
 import com.nexus.launcher.integration.media.NowPlayingController
+import com.nexus.launcher.integration.weather.WeatherSource
 import com.nexus.launcher.integration.widgets.NexusWidgetHost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +27,7 @@ class NexusApp : Application() {
     val wallpaperSource: WallpaperSource by lazy { WallpaperSource(this) }
     val nowPlaying: NowPlayingController by lazy { NowPlayingController(this) }
     val claudeBridge: ClaudeBridge by lazy { ClaudeBridge(scope) }
+    val weather: WeatherSource by lazy { WeatherSource(this) }
     val widgetHost: NexusWidgetHost by lazy { NexusWidgetHost(this) }
     val discoverOverlay: DiscoverOverlayController by lazy { DiscoverOverlayController(this) }
 }

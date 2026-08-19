@@ -3,6 +3,7 @@ package com.nexus.launcher.ui.home
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -18,7 +19,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -37,20 +40,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.nexus.launcher.data.NexusSettings
 import com.nexus.launcher.domain.AppEntry
+import com.nexus.launcher.domain.FolderContents
 import com.nexus.launcher.integration.claude.ClaudeHomeLine
+import com.nexus.launcher.integration.weather.WeatherNow
 import com.nexus.launcher.ui.clock.ClockText
 import com.nexus.launcher.ui.common.AppIcon
 import com.nexus.launcher.ui.theme.LocalWindowProfile
@@ -67,13 +71,16 @@ import kotlinx.coroutines.launch
 fun HomePage(
     apps: List<AppEntry>,
     favorites: List<AppEntry>,
+    folders: List<FolderContents>,
     settings: NexusSettings,
     clock: ClockText,
+    weather: WeatherNow?,
     claudeLine: ClaudeHomeLine?,
     resetToken: Int,
     modifier: Modifier = Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
+    onOpenFolder: (FolderContents) -> Unit,
     onClaudeClick: () -> Unit,
     onClockClick: () -> Unit,
 ) {
@@ -83,13 +90,16 @@ fun HomePage(
         HomeLandscape(
             apps = apps,
             favorites = favorites,
+            folders = folders,
             settings = settings,
             clock = clock,
+            weather = weather,
             claudeLine = claudeLine,
             resetToken = resetToken,
             modifier = modifier,
             onLaunch = onLaunch,
             onLongPressApp = onLongPressApp,
+            onOpenFolder = onOpenFolder,
             onClaudeClick = onClaudeClick,
             onClockClick = onClockClick,
         )
@@ -97,13 +107,16 @@ fun HomePage(
         HomePortrait(
             apps = apps,
             favorites = favorites,
+            folders = folders,
             settings = settings,
             clock = clock,
+            weather = weather,
             claudeLine = claudeLine,
             resetToken = resetToken,
             modifier = modifier,
             onLaunch = onLaunch,
             onLongPressApp = onLongPressApp,
+            onOpenFolder = onOpenFolder,
             onClaudeClick = onClaudeClick,
             onClockClick = onClockClick,
         )
@@ -114,13 +127,16 @@ fun HomePage(
 private fun HomePortrait(
     apps: List<AppEntry>,
     favorites: List<AppEntry>,
+    folders: List<FolderContents>,
     settings: NexusSettings,
     clock: ClockText,
+    weather: WeatherNow?,
     claudeLine: ClaudeHomeLine?,
     resetToken: Int,
     modifier: Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
+    onOpenFolder: (FolderContents) -> Unit,
     onClaudeClick: () -> Unit,
     onClockClick: () -> Unit,
 ) {
@@ -129,6 +145,7 @@ private fun HomePortrait(
     Column(modifier = modifier.fillMaxSize()) {
         ClockBlock(
             clock = clock,
+            weather = weather,
             claudeLine = claudeLine.takeIf { settings.showClaudeStatus },
             onClaudeClick = onClaudeClick,
             onClockClick = onClockClick,
@@ -144,6 +161,7 @@ private fun HomePortrait(
         FavoritesWithScrub(
             apps = apps,
             favorites = favorites,
+            folders = folders,
             settings = settings,
             columns = profile.homeColumns,
             resetToken = resetToken,
@@ -152,6 +170,7 @@ private fun HomePortrait(
                 .fillMaxWidth(),
             onLaunch = onLaunch,
             onLongPressApp = onLongPressApp,
+            onOpenFolder = onOpenFolder,
         )
     }
 }
@@ -161,13 +180,16 @@ private fun HomePortrait(
 private fun HomeLandscape(
     apps: List<AppEntry>,
     favorites: List<AppEntry>,
+    folders: List<FolderContents>,
     settings: NexusSettings,
     clock: ClockText,
+    weather: WeatherNow?,
     claudeLine: ClaudeHomeLine?,
     resetToken: Int,
     modifier: Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
+    onOpenFolder: (FolderContents) -> Unit,
     onClaudeClick: () -> Unit,
     onClockClick: () -> Unit,
 ) {
@@ -186,6 +208,7 @@ private fun HomeLandscape(
         ) {
             ClockBlock(
                 clock = clock,
+                weather = weather,
                 claudeLine = claudeLine.takeIf { settings.showClaudeStatus },
                 onClaudeClick = onClaudeClick,
                 onClockClick = onClockClick,
@@ -195,6 +218,7 @@ private fun HomeLandscape(
         FavoritesWithScrub(
             apps = apps,
             favorites = favorites,
+            folders = folders,
             settings = settings,
             columns = 1,
             resetToken = resetToken,
@@ -203,22 +227,21 @@ private fun HomeLandscape(
                 .fillMaxHeight(),
             onLaunch = onLaunch,
             onLongPressApp = onLongPressApp,
+            onOpenFolder = onOpenFolder,
         )
     }
 }
 
 /**
- * The clock. One line, two tones: the hour in white, the colon and minutes in
- * the accent, the meridiem small and grey beside them — and a spring bounce as
- * the minute rolls over.
- *
- * Deliberately a single [Text] over an annotated string rather than a Text per
- * part. Stacking them left a gap: Baloo2's line metrics do not collapse to the
- * leading you ask for, so the parts drifted apart instead of nesting.
+ * The clock, Niagara-style: no separator at all — the minutes are simply set in
+ * the accent and pulled back so their first glyph tucks under the hour's last
+ * one. The date sits directly beneath, close enough to read as one block, and
+ * carries the weather and battery.
  */
 @Composable
 private fun ClockBlock(
     clock: ClockText,
+    weather: WeatherNow?,
     claudeLine: ClaudeHomeLine?,
     onClaudeClick: () -> Unit,
     onClockClick: () -> Unit,
@@ -230,29 +253,9 @@ private fun ClockBlock(
         fontSize = digitSize.sp,
         lineHeight = (NexusType.Clock.lineHeight.value * profile.clockScale).sp,
     )
-
-    val face = remember(clock.hour, clock.minute, clock.meridiem) {
-        buildAnnotatedString {
-            withStyle(SpanStyle(color = NexusColor.OnWallpaper)) { append(clock.hour) }
-            // The separator sits back so the two halves read as two colours
-            // rather than three.
-            withStyle(SpanStyle(color = NexusColor.Accent.copy(alpha = 0.5f))) { append(":") }
-            withStyle(SpanStyle(color = NexusColor.Accent)) { append(clock.minute) }
-            if (clock.meridiem.isNotEmpty()) {
-                withStyle(
-                    SpanStyle(
-                        color = NexusColor.TextSecondary,
-                        fontSize = (digitSize * 0.24f).sp,
-                        // The clock face is tracked tight; the meridiem is not.
-                        letterSpacing = 0.sp,
-                    ),
-                ) {
-                    append("  ")
-                    append(clock.meridiem)
-                }
-            }
-        }
-    }
+    // How far the minutes slide back under the hour. A share of the type size,
+    // so it holds at every clock scale.
+    val overlap = (digitSize * 0.13f).dp
 
     val bounce = remember { Animatable(1f) }
     LaunchedEffect(clock.minute) {
@@ -264,9 +267,8 @@ private fun ClockBlock(
     }
 
     Column(modifier = modifier) {
-        Text(
-            text = face,
-            style = digitStyle,
+        Row(
+            verticalAlignment = Alignment.Bottom,
             modifier = Modifier
                 .graphicsLayer {
                     // Anchored at the left edge so the bounce grows out of the
@@ -276,14 +278,56 @@ private fun ClockBlock(
                     scaleY = bounce.value
                 }
                 .clickable(onClick = onClockClick),
-        )
+        ) {
+            Text(
+                text = clock.hour,
+                style = digitStyle,
+                color = NexusColor.OnWallpaper,
+                // Drawn above the minutes, so the hour stays whole where the
+                // two overlap and the minutes are the ones that give way.
+                modifier = Modifier.zIndex(1f),
+            )
+            Text(
+                text = clock.minute,
+                style = digitStyle,
+                color = NexusColor.Accent,
+                modifier = Modifier.offset(x = -overlap),
+            )
+            if (clock.meridiem.isNotEmpty()) {
+                Text(
+                    text = clock.meridiem,
+                    style = NexusType.DateLine.copy(fontSize = (digitSize * 0.22f).sp),
+                    color = NexusColor.TextSecondary,
+                    modifier = Modifier
+                        .offset(x = -overlap + 4.dp)
+                        .padding(bottom = (digitSize * 0.13f).dp),
+                )
+            }
+        }
 
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = clock.date,
-            style = NexusType.DateLine,
-            color = NexusColor.OnWallpaper,
-        )
+        // Negative, not a spacer: the clock's line box carries a band of descent
+        // space below the glyphs, and the date has to climb back through it to
+        // sit under the numbers rather than a finger-width below them.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.offset(y = (-digitSize * 0.14f).dp),
+        ) {
+            Text(
+                text = clock.date,
+                style = NexusType.DateLine,
+                color = NexusColor.OnWallpaper,
+            )
+            if (weather != null) {
+                Text(
+                    text = weather.short,
+                    style = NexusType.DateLine,
+                    color = NexusColor.OnWallpaper,
+                    maxLines = 1,
+                )
+            }
+        }
+
         if (claudeLine != null) {
             Spacer(Modifier.height(4.dp))
             Text(
@@ -312,12 +356,14 @@ private fun ClockBlock(
 private fun FavoritesWithScrub(
     apps: List<AppEntry>,
     favorites: List<AppEntry>,
+    folders: List<FolderContents>,
     settings: NexusSettings,
     columns: Int,
     resetToken: Int,
     modifier: Modifier = Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
+    onOpenFolder: (FolderContents) -> Unit,
 ) {
     val profile = LocalWindowProfile.current
     val scrub = rememberScrubState()
@@ -412,6 +458,15 @@ private fun FavoritesWithScrub(
                                 onLongPress = onLongPressApp,
                             )
                         }
+                        if (browsing) {
+                            gridItems(folders, key = { "folder:${it.id}" }) { folder ->
+                                FolderRow(
+                                    folder = folder,
+                                    settings = settings,
+                                    onClick = onOpenFolder,
+                                )
+                            }
+                        }
                     }
                 } else {
                     LazyColumn(
@@ -429,6 +484,17 @@ private fun FavoritesWithScrub(
                                 onLaunch = onLaunch,
                                 onLongPress = onLongPressApp,
                             )
+                        }
+                        // Folders live after Z: they are where apps go to leave
+                        // the alphabet, so they sit past the end of it.
+                        if (browsing) {
+                            items(folders, key = { "folder:${it.id}" }) { folder ->
+                                FolderRow(
+                                    folder = folder,
+                                    settings = settings,
+                                    onClick = onOpenFolder,
+                                )
+                            }
                         }
                     }
                 }
@@ -563,6 +629,65 @@ private fun FavoriteRow(
             color = NexusColor.OnWallpaper,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * One folder row. The tile is a quarter-grid of the first four members rather
+ * than a folder glyph — at a glance you recognise a folder by what is in it.
+ */
+@Composable
+private fun FolderRow(
+    folder: FolderContents,
+    settings: NexusSettings,
+    onClick: (FolderContents) -> Unit,
+) {
+    val tile = settings.iconSizeDp.dp
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick(folder) }
+            .padding(vertical = 6.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(tile)
+                .clip(RoundedCornerShape(tile * 0.3f))
+                .background(NexusColor.Accent.copy(alpha = 0.22f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                folder.apps.take(4).chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        pair.forEach { app ->
+                            AppIcon(
+                                entry = app,
+                                size = tile * 0.38f,
+                                mode = settings.iconPack,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Text(
+            text = folder.name,
+            style = NexusType.AppLabel.copy(fontSize = settings.labelSizeSp.sp),
+            color = NexusColor.OnWallpaper,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = folder.apps.size.toString(),
+            style = NexusType.AppLabel.copy(fontSize = (settings.labelSizeSp - 3).sp),
+            color = NexusColor.TextSecondary,
         )
     }
 }

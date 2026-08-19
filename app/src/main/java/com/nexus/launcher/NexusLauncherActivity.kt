@@ -51,6 +51,7 @@ import com.nexus.launcher.ui.overlay.LauncherOverlay
 import com.nexus.launcher.ui.overlay.OverlayRoute
 import com.nexus.launcher.ui.theme.NexusColor
 import com.nexus.launcher.ui.theme.NexusTheme
+import kotlinx.coroutines.launch
 
 /**
  * The single HOME activity. Everything the launcher shows lives here; there is no
@@ -68,6 +69,18 @@ class NexusLauncherActivity : FragmentActivity() {
 
     /** Bumped on resume to re-run checks that depend on system state. */
     private var resumeTick by mutableIntStateOf(0)
+
+    /**
+     * Coarse location, asked for only when the weather line is switched on.
+     * Declining is a normal answer: the line simply stays empty.
+     */
+    private val locationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            lifecycleScope.launch { (application as NexusApp).weather.refresh(force = true) }
+        }
+    }
 
     private val folderPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
@@ -95,6 +108,7 @@ class NexusLauncherActivity : FragmentActivity() {
         setContent {
             val profile by rememberWindowProfile(this)
             val clock = rememberClockText()
+            val weather by app.weather.state.collectAsStateWithLifecycle()
 
             // Read once and share: every hub page blurs the same bitmap.
             val wallpaperBitmap by app.wallpaperSource.wallpaper.collectAsStateWithLifecycle()
@@ -118,10 +132,24 @@ class NexusLauncherActivity : FragmentActivity() {
                         applySystemBars(settings.hideStatusBar, settings.statusBarGesture)
                     }
 
+                    // Weather is opt-in and needs a position. Ask the first time
+                    // it is switched on, then keep the reading fresh on resume.
+                    LaunchedEffect(settings.showWeather, resumeTick) {
+                        if (!settings.showWeather) return@LaunchedEffect
+                        if (app.weather.hasLocationPermission) {
+                            app.weather.refresh()
+                        } else if (resumeTick == 0) {
+                            locationPermission.launch(
+                                android.Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
+                        }
+                    }
+
                     Box(modifier = Modifier.fillMaxSize()) {
                         LauncherScreen(
                             viewModel = viewModel,
                             clock = clock,
+                            weather = weather,
                             host = host,
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -316,6 +344,10 @@ class NexusLauncherActivity : FragmentActivity() {
 
         override fun openAppOptions(entry: AppEntry) {
             overlayRoute = OverlayRoute.AppOptions(entry)
+        }
+
+        override fun openFolder(folderId: String) {
+            overlayRoute = OverlayRoute.FolderContents(folderId)
         }
 
         override fun openEditMode() {
