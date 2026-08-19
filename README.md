@@ -111,12 +111,26 @@ size and the hinge state reported by Jetpack WindowManager:
 ## Layout
 
 ```
+shared/aidl/com/nexus/companion/   the launcher <-> companion interface,
+                                   compiled into both APKs
+
+companion/src/main/
+├── aidl/com/google/android/libraries/launcherclient/
+│                               client-side declaration of the Google app's
+│                               overlay interface (names are part of the
+│                               binder contract — do not rename)
+└── java/com/nexus/companion/
+    ├── GoogleOverlayClient.kt  binds com.android.launcher3.WINDOW_OVERLAY
+    ├── NexusOverlayService.kt  re-exports it to Nexus, caller-verified
+    └── CompanionActivity.kt    status and setup screen
+
 app/src/main/java/com/nexus/launcher/
 ├── NexusLauncherActivity.kt   HOME activity, launcher host actions
 ├── NexusApp.kt                process-wide singletons
 ├── domain/                    models
 ├── data/                      settings + persistence (DataStore)
 ├── integration/               apps, emulators, media, notifications, widgets, claude
+├── integration/discover/      launcher side of the Discover bridge
 └── ui/
     ├── theme/                 design tokens from the handoff
     ├── layout/                window size class + fold posture

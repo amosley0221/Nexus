@@ -81,33 +81,31 @@ fun LauncherScreen(
         pageCount = { activePages.size.coerceAtLeast(1) },
     )
 
-    // Drive the Google Discover overlay from the pager. The overlay is drawn by
-    // the Google app into its own window, so the launcher only reports how far
-    // the user has swiped toward the Discover page; a page-1 (Home) offset of
-    // 0 means fully open and 1 means fully hidden.
+    // Drive the Google Discover overlay from the pager. Nexus never draws the
+    // feed — the Google app renders it into its own window over ours — so all
+    // the launcher owes it is a scroll position: 1f when the Discover page is
+    // fully in view, 0f once a full page away from it.
     val discoverIndex = remember(activePages) {
         activePages.indexOfFirst { it.kind == PageKind.Discover }
     }
     if (discoverIndex >= 0) {
-        val overlay = remember(context) {
+        val discoverOverlay = remember(context) {
             (context.applicationContext as NexusApp).discoverOverlay
         }
-        val overlayState by overlay.state.collectAsStateWithLifecycle()
+        val discoverState by discoverOverlay.state.collectAsStateWithLifecycle()
 
-        LaunchedEffect(pagerState, overlayState.isUsable, discoverIndex) {
-            if (!overlayState.isUsable) return@LaunchedEffect
+        LaunchedEffect(pagerState, discoverState.isUsable, discoverIndex) {
+            if (!discoverState.isUsable) return@LaunchedEffect
             snapshotFlow {
-                // Distance from the Discover page, clamped to the one-page
-                // window either side of it.
                 val position = pagerState.currentPage + pagerState.currentPageOffsetFraction
                 (1f - (position - discoverIndex).absoluteValue).coerceIn(0f, 1f)
-            }.collect { progress -> overlay.onScroll(progress) }
+            }.collect { progress -> discoverOverlay.onScroll(progress) }
         }
 
-        LaunchedEffect(pagerState, overlayState.isUsable) {
-            if (!overlayState.isUsable) return@LaunchedEffect
+        LaunchedEffect(pagerState, discoverState.isUsable) {
+            if (!discoverState.isUsable) return@LaunchedEffect
             snapshotFlow { pagerState.isScrollInProgress }.collect { scrolling ->
-                if (scrolling) overlay.startScroll() else overlay.endScroll()
+                if (scrolling) discoverOverlay.startScroll() else discoverOverlay.endScroll()
             }
         }
     }
