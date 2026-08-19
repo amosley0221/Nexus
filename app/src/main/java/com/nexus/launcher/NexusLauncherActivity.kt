@@ -26,9 +26,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import com.nexus.launcher.data.StatusBarGesture
 import com.nexus.launcher.domain.AppEntry
 import com.nexus.launcher.domain.NotificationCard
 import com.nexus.launcher.domain.RomEntry
@@ -109,6 +112,12 @@ class NexusLauncherActivity : FragmentActivity() {
                     val needsDefaultPrompt = !settings.defaultLauncherPromptSeen &&
                         !isDefaultHome(resumeTick)
 
+                    // Re-applied on resume too: returning from another app, or
+                    // from the system shade, restores the bars behind our back.
+                    LaunchedEffect(settings.hideStatusBar, settings.statusBarGesture, resumeTick) {
+                        applySystemBars(settings.hideStatusBar, settings.statusBarGesture)
+                    }
+
                     Box(modifier = Modifier.fillMaxSize()) {
                         LauncherScreen(
                             viewModel = viewModel,
@@ -162,6 +171,31 @@ class NexusLauncherActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Applies the status-bar preference to the window.
+     *
+     * [StatusBarGesture] decides how a hidden bar comes back:
+     * [StatusBarGesture.SwipeDownTopEdge] lets a swipe from the top edge pull it
+     * in transiently, [StatusBarGesture.Never] keeps it hidden until the
+     * preference itself changes, and [StatusBarGesture.Always] keeps the bar on
+     * regardless of the hide toggle.
+     */
+    private fun applySystemBars(hide: Boolean, gesture: StatusBarGesture) {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+
+        if (!hide || gesture == StatusBarGesture.Always) {
+            controller.show(WindowInsetsCompat.Type.statusBars())
+            return
+        }
+
+        controller.systemBarsBehavior = if (gesture == StatusBarGesture.SwipeDownTopEdge) {
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+        }
+        controller.hide(WindowInsetsCompat.Type.statusBars())
     }
 
     /**

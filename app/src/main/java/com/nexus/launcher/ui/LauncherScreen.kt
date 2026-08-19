@@ -46,9 +46,18 @@ import com.nexus.launcher.ui.theme.NexusColor
 import kotlin.math.absoluteValue
 import kotlinx.coroutines.launch
 
-/** Overlay scroll positions at which the Google feed counts as open or closed. */
+/** Overlay scroll position at which the Google feed counts as fully open. */
 private const val OVERLAY_OPEN = 0.9f
-private const val OVERLAY_CLOSED = 0.05f
+
+/**
+ * Scroll position below which the feed is treated as committed to closing.
+ *
+ * Deliberately not near zero. Waiting for the overlay to finish closing means
+ * moving the pager only after Google's window has already slid off, so the
+ * transparent Discover page is visible for the whole trip home. Reacting while
+ * that window still covers most of the screen hides the move behind it.
+ */
+private const val OVERLAY_CLOSING = 0.6f
 
 /** Which full-screen overlay, if any, is on top of the pager. */
 enum class Overlay { None, Search, Notifications }
@@ -145,12 +154,16 @@ fun LauncherScreen(
                 when {
                     progress >= OVERLAY_OPEN -> sawOpen = true
 
-                    sawOpen && progress <= OVERLAY_CLOSED -> {
+                    sawOpen && progress <= OVERLAY_CLOSING -> {
                         sawOpen = false
                         if (!pagerState.isScrollInProgress &&
                             pagerState.settledPage == discoverIndex
                         ) {
-                            pagerState.animateScrollToPage(homeIndex)
+                            // Snap rather than animate: the overlay is already
+                            // playing its own close animation, and a second
+                            // animation underneath it reads as the page sliding
+                            // away by itself once the feed has gone.
+                            pagerState.scrollToPage(homeIndex)
                         }
                     }
                 }
