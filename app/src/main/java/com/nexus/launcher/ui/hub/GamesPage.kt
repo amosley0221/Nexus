@@ -57,8 +57,6 @@ fun GamesPage(
     roms: List<RomEntry>,
     favouriteGameKeys: Set<String>,
     modifier: Modifier = Modifier,
-    statusLeft: String = "",
-    statusRight: String = "",
     onLaunchGame: (AppEntry) -> Unit,
     onGameOptions: (AppEntry) -> Unit,
     onLaunchRom: (RomEntry) -> Unit,
@@ -73,8 +71,6 @@ fun GamesPage(
     HubScaffold(
         title = "Games",
         modifier = modifier,
-        statusLeft = statusLeft,
-        statusRight = statusRight,
         trailing = {
             Icon(
                 imageVector = Icons.Rounded.Search,

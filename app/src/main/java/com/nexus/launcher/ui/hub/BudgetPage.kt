@@ -50,8 +50,6 @@ fun BudgetPage(
     budget: BudgetState,
     currency: String = "€",
     modifier: Modifier = Modifier,
-    statusLeft: String = "",
-    statusRight: String = "",
     onAddTransaction: () -> Unit,
     onPeriodClick: () -> Unit,
 ) {
@@ -63,8 +61,6 @@ fun BudgetPage(
     HubScaffold(
         title = "Budget",
         modifier = modifier,
-        statusLeft = statusLeft,
-        statusRight = statusRight,
         trailing = {
             Text(
                 text = "$monthLabel ▾",

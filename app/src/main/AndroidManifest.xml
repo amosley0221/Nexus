@@ -61,6 +61,26 @@
             </intent-filter>
         </activity>
 
+        <!--
+          A second launcher entry so Nexus Settings is reachable from the app
+          list and findable in search — not only through a long-press on Home.
+          It hands straight off to the main activity, which opens the settings
+          overlay; the launcher never leaves its single task.
+        -->
+        <activity
+            android:name=".NexusSettingsActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:label="@string/settings_name"
+            android:icon="@mipmap/ic_launcher"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".integration.notifications.NexusNotificationListener"
             android:exported="true"

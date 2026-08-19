@@ -69,5 +69,4 @@ object NexusColor {
 
     // Scrims
     val OverscrollScrim = Color(0x730A0608) // rgba(10,6,8,0.45)
-    val GestureBar = Color(0xFF2A3242)
 }

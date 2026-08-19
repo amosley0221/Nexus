@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
@@ -26,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.nexus.launcher.data.IconPackMode
 import com.nexus.launcher.data.NexusSettings
 import com.nexus.launcher.domain.AppEntry
+import com.nexus.launcher.integration.claude.ClaudeHomeLine
 import com.nexus.launcher.ui.common.AppIcon
 import com.nexus.launcher.ui.layout.WindowProfile
 import com.nexus.launcher.ui.theme.LocalWindowProfile
@@ -61,7 +64,7 @@ fun HomePage(
     settings: NexusSettings,
     clockText: String,
     dateText: String,
-    claudeLine: String?,
+    claudeLine: ClaudeHomeLine?,
     modifier: Modifier = Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
@@ -108,7 +111,7 @@ private fun HomePortrait(
     settings: NexusSettings,
     clockText: String,
     dateText: String,
-    claudeLine: String?,
+    claudeLine: ClaudeHomeLine?,
     modifier: Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
@@ -155,7 +158,7 @@ private fun HomeLandscape(
     settings: NexusSettings,
     clockText: String,
     dateText: String,
-    claudeLine: String?,
+    claudeLine: ClaudeHomeLine?,
     modifier: Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
@@ -202,7 +205,7 @@ private fun HomeLandscape(
 private fun ClockBlock(
     clockText: String,
     dateText: String,
-    claudeLine: String?,
+    claudeLine: ClaudeHomeLine?,
     onClaudeClick: () -> Unit,
     onClockClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -229,9 +232,9 @@ private fun ClockBlock(
         if (claudeLine != null) {
             Spacer(Modifier.height(4.dp))
             Text(
-                text = claudeLine,
+                text = claudeLine.text,
                 style = NexusType.DateLine,
-                color = NexusColor.Accent,
+                color = if (claudeLine.needsInput) NexusColor.Amber else NexusColor.Accent,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.clickable(onClick = onClaudeClick),
@@ -260,42 +263,76 @@ private fun FavoritesWithScrub(
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
 
-    // Letters that actually have apps, so the strip never points at an empty jump.
-    val presentLetters = remember(apps) {
-        val present = apps.mapTo(LinkedHashSet()) { it.sortLetter }
-        AZ_LETTERS.filter { it in present }
+    // Favourites first, then everything alphabetically — one uniform list, no
+    // header or divider between the two halves.
+    val rows = remember(apps, favorites) { favorites + apps }
+
+    // Index of the first row for each section letter, so a scrub can jump
+    // straight to it. Favourites occupy the rows before the A–Z run.
+    val letterAnchors = remember(rows, favorites) {
+        buildMap {
+            for (index in favorites.size until rows.size) {
+                putIfAbsent(rows[index].sortLetter, index)
+            }
+        }
     }
 
-    // While scrubbing, the list shows every app from the active letter onward;
-    // at rest it shows just the favourites, as the design specifies.
-    val visible = remember(apps, favorites, scrub.activeLetter) {
-        val letter = scrub.activeLetter
-        if (letter == null) favorites else apps.filter { it.sortLetter >= letter }
+    val presentLetters = remember(letterAnchors) {
+        AZ_LETTERS.filter { it == STAR_LETTER || it in letterAnchors }
     }
+
+    /** First row at or after [letter]; the star and unknown letters go to the top. */
+    fun anchorFor(letter: Char): Int {
+        if (letter == STAR_LETTER) return 0
+        letterAnchors[letter]?.let { return it }
+        // The touched letter has no apps — fall forward to the next one that does.
+        return AZ_LETTERS
+            .dropWhile { it != letter }
+            .firstNotNullOfOrNull { letterAnchors[it] }
+            ?: 0
+    }
+
+    // The pin hint occupies a lazy slot of its own, so every anchor shifts by
+    // one while it is showing.
+    val headerRows = if (favorites.isEmpty()) 1 else 0
+
+    suspend fun scrollTo(rowIndex: Int) {
+        val index = rowIndex + headerRows
+        if (columns > 1) gridState.scrollToItem(index) else listState.scrollToItem(index)
+    }
+
+    // Where the list sat before the scrub began, so a cancelled gesture can put
+    // it back rather than dumping the user at the top. Null means this gesture
+    // has not captured a resting position yet.
+    var preScrub by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     LaunchedEffect(scrub.activeLetter) {
-        if (scrub.activeLetter != null) {
-            if (columns > 1) gridState.scrollToItem(0) else listState.scrollToItem(0)
-        }
+        val letter = scrub.activeLetter ?: return@LaunchedEffect
+        scrollTo(anchorFor(letter))
     }
 
     Box(modifier = modifier) {
         Row(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
+                val contentPadding = PaddingValues(
+                    start = profile.homePadding,
+                    end = 8.dp,
+                    top = 8.dp,
+                    bottom = 8.dp,
+                )
+
                 if (columns > 1) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(columns),
                         state = gridState,
-                        contentPadding = PaddingValues(
-                            start = profile.homePadding,
-                            end = 8.dp,
-                            top = 8.dp,
-                            bottom = 8.dp,
-                        ),
+                        contentPadding = contentPadding,
                         horizontalArrangement = Arrangement.spacedBy(44.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        gridItems(visible, key = { it.key }) { app ->
+                        if (favorites.isEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) { PinHint() }
+                        }
+                        gridItems(rows, key = { it.key }) { app ->
                             FavoriteRow(
                                 app = app,
                                 settings = settings,
@@ -308,15 +345,13 @@ private fun FavoritesWithScrub(
                 } else {
                     LazyColumn(
                         state = listState,
-                        contentPadding = PaddingValues(
-                            start = profile.homePadding,
-                            end = 8.dp,
-                            top = 8.dp,
-                            bottom = 8.dp,
-                        ),
+                        contentPadding = contentPadding,
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(visible, key = { it.key }) { app ->
+                        if (favorites.isEmpty()) {
+                            item { PinHint() }
+                        }
+                        items(rows, key = { it.key }) { app ->
                             FavoriteRow(
                                 app = app,
                                 settings = settings,
@@ -333,10 +368,39 @@ private fun FavoritesWithScrub(
                 letters = presentLetters,
                 state = scrub,
                 modifier = Modifier.padding(end = 4.dp),
-                onLetterChanged = { },
-                onReleased = {
-                    scope.launch {
-                        if (columns > 1) gridState.scrollToItem(0) else listState.scrollToItem(0)
+                onLetterChanged = {
+                    // Capture the resting position on the first letter of a
+                    // gesture, before any preview scrolling moves the list.
+                    if (preScrub == null) {
+                        preScrub = if (columns > 1) {
+                            gridState.firstVisibleItemIndex to
+                                gridState.firstVisibleItemScrollOffset
+                        } else {
+                            listState.firstVisibleItemIndex to
+                                listState.firstVisibleItemScrollOffset
+                        }
+                    }
+                },
+                onReleased = { committed ->
+                    // The preview scroll already put the list where it belongs;
+                    // committing just means leaving it there.
+                    preScrub = null
+                    if (committed != null) {
+                        scope.launch { scrollTo(anchorFor(committed)) }
+                    }
+                },
+                onCancelled = {
+                    val resting = preScrub
+                    preScrub = null
+                    if (resting != null) {
+                        scope.launch {
+                            val (index, offset) = resting
+                            if (columns > 1) {
+                                gridState.scrollToItem(index, offset)
+                            } else {
+                                listState.scrollToItem(index, offset)
+                            }
+                        }
                     }
                 },
             )
@@ -354,6 +418,22 @@ private fun FavoritesWithScrub(
             )
         }
     }
+}
+
+/**
+ * Shown only while no favourites are pinned. Deliberately a bare line in the
+ * date-line font — not a card, not a placeholder row — and it disappears for
+ * good once the first favourite exists.
+ */
+@Composable
+private fun PinHint() {
+    val profile = LocalWindowProfile.current
+    Text(
+        text = "Long-press an app to pin it here",
+        style = NexusType.DateLine.copy(fontSize = 13.sp),
+        color = NexusColor.TextSecondary,
+        modifier = Modifier.padding(bottom = 10.dp, end = profile.homePadding),
+    )
 }
 
 /**

@@ -3,6 +3,7 @@ package com.nexus.launcher
 import android.app.Application
 import com.nexus.launcher.data.SettingsRepository
 import com.nexus.launcher.integration.apps.AppRepository
+import com.nexus.launcher.integration.apps.WallpaperSource
 import com.nexus.launcher.integration.claude.ClaudeBridge
 import com.nexus.launcher.integration.discover.DiscoverOverlayController
 import com.nexus.launcher.integration.media.NowPlayingController
@@ -22,6 +23,7 @@ class NexusApp : Application() {
 
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(this) }
     val appRepository: AppRepository by lazy { AppRepository(this) }
+    val wallpaperSource: WallpaperSource by lazy { WallpaperSource(this) }
     val nowPlaying: NowPlayingController by lazy { NowPlayingController(this) }
     val claudeBridge: ClaudeBridge by lazy { ClaudeBridge(scope) }
     val widgetHost: NexusWidgetHost by lazy { NexusWidgetHost(this) }

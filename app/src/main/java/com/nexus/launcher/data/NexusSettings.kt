@@ -40,10 +40,14 @@ data class NexusSettings(
     val twitchToken: String = "",
     val twitchLogin: String = "",
     val claudeRelayUrl: String = "",
+    /** Populates the Claude feed with sample tasks. Never affects the Home line. */
+    val claudeSamplePreview: Boolean = false,
     val romFolderUris: List<String> = emptyList(),
     val emulatorMap: Map<String, String> = emptyMap(),
 
     // HOME
     val showClaudeStatus: Boolean = true,
     val useBundledWallpaper: Boolean = false,
+    /** Set once the default-home prompt has been answered either way. */
+    val defaultLauncherPromptSeen: Boolean = false,
 )

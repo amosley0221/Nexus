@@ -67,6 +67,7 @@ fun PageManager(
     onToggleVisible: (PageConfig) -> Unit,
     onEditPage: (PageConfig) -> Unit,
     onAddTemplate: (PageKind) -> Unit,
+    onOpenSettings: () -> Unit,
     onDone: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -78,12 +79,23 @@ fun PageManager(
         title = "Pages",
         modifier = modifier,
         trailing = {
-            Text(
-                text = "Done",
-                style = NexusType.CardTitle,
-                color = NexusColor.Accent,
-                modifier = Modifier.clickable(onClick = onDone),
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "⚙",
+                    style = NexusType.PageTitle,
+                    color = NexusColor.TextSecondary,
+                    modifier = Modifier.clickable(onClick = onOpenSettings),
+                )
+                Text(
+                    text = "Done",
+                    style = NexusType.CardTitle,
+                    color = NexusColor.Accent,
+                    modifier = Modifier.clickable(onClick = onDone),
+                )
+            }
         },
     ) {
         LazyColumn(
@@ -150,6 +162,34 @@ fun PageManager(
                     NexusChip(label = label, selected = false) { onAddTemplate(kind) }
                 }
             }
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        // Settings sits at the bottom of edit mode, in the same row style as the
+        // pages above it — this is the entry point a long-press lands on.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpenSettings)
+                .padding(vertical = 12.dp),
+        ) {
+            Text(text = "⚙", style = NexusType.SectionHeader, color = NexusColor.Accent)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Nexus Settings",
+                    style = NexusType.SectionHeader,
+                    color = NexusColor.TextPrimary,
+                )
+                Text(
+                    text = "Layout, apps, security, integrations",
+                    style = NexusType.Meta,
+                    color = NexusColor.TextSecondary,
+                )
+            }
+            Text("›", style = NexusType.SectionHeader, color = NexusColor.TextFaint)
         }
     }
 }

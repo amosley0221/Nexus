@@ -43,8 +43,6 @@ fun BlankPage(
     widgetHost: NexusWidgetHost?,
     modifier: Modifier = Modifier,
     editing: Boolean = false,
-    statusLeft: String = "",
-    statusRight: String = "",
     onAddAt: (gridX: Int, gridY: Int) -> Unit,
     onWidgetLongPress: (WidgetConfig) -> Unit,
 ) {
@@ -55,8 +53,6 @@ fun BlankPage(
     HubScaffold(
         title = page.title,
         modifier = modifier,
-        statusLeft = statusLeft,
-        statusRight = statusRight,
         subtitle = {
             Text(
                 text = "$columns × $rows grid · snap to grid",

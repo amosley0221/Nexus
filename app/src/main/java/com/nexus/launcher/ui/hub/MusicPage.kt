@@ -73,8 +73,6 @@ fun MusicPage(
     shortcuts: List<MusicShortcut>,
     downloadedCount: Int,
     modifier: Modifier = Modifier,
-    statusLeft: String = "",
-    statusRight: String = "",
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -88,8 +86,6 @@ fun MusicPage(
     HubScaffold(
         title = "Music",
         modifier = modifier,
-        statusLeft = statusLeft,
-        statusRight = statusRight,
         subtitle = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("♪ Apple Music ·", style = NexusType.BodySmall, color = NexusColor.TextSecondary)

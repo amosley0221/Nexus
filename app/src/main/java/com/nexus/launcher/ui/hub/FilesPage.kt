@@ -55,8 +55,6 @@ fun FilesPage(
     dueItems: List<DueItem>,
     freeSpaceLabel: String,
     modifier: Modifier = Modifier,
-    statusLeft: String = "",
-    statusRight: String = "",
     onFileClick: (FileEntry) -> Unit,
     onStarToggle: (FileEntry) -> Unit,
     onPickFolder: () -> Unit,
@@ -66,8 +64,6 @@ fun FilesPage(
     HubScaffold(
         title = "Files",
         modifier = modifier,
-        statusLeft = statusLeft,
-        statusRight = statusRight,
         trailing = {
             Text(
                 text = freeSpaceLabel,

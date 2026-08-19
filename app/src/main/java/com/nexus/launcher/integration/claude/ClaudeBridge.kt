@@ -28,11 +28,14 @@ import java.net.URL
  * tasks — that keeps the screens reviewable on-device before the desktop half
  * exists. Point [relayUrl] at a real endpoint in Nexus Settings to go live.
  */
+/** The Home status line: its text, and whether it is the amber needs-you state. */
+data class ClaudeHomeLine(val text: String, val needsInput: Boolean)
+
 class ClaudeBridge(private val scope: CoroutineScope) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val _tasks = MutableStateFlow(SampleData.claudeTasks())
+    private val _tasks = MutableStateFlow<List<ClaudeTask>>(emptyList())
     val tasks: StateFlow<List<ClaudeTask>> = _tasks.asStateFlow()
 
     private val _live = MutableStateFlow(false)
@@ -41,13 +44,46 @@ class ClaudeBridge(private val scope: CoroutineScope) {
     private var pollJob: Job? = null
     private var relayUrl: String = ""
 
-    /** The single line shown on Home; null hides it, as the design requires. */
-    val homeLine: String?
-        get() = _tasks.value.firstOrNull { it.status == ClaudeStatus.Running }?.let { task ->
-            "✳ Claude: ${task.title.lowercase()} ${(task.progress * 100).toInt()}% ›"
-        } ?: _tasks.value.firstOrNull { it.status == ClaudeStatus.NeedsYou }?.let { task ->
-            "✳ Claude: needs you — ${task.title.lowercase()} ›"
+    /**
+     * The single line shown on Home, or null to render nothing at all.
+     *
+     * Null unless a relay is configured *and* it is reporting live work: no
+     * relay, no tasks, or everything finished all mean the line is absent and
+     * the app list reclaims the space. Sample tasks never reach Home.
+     */
+    val homeLine: ClaudeHomeLine?
+        get() {
+            if (!isConfigured) return null
+
+            _tasks.value.firstOrNull { it.status == ClaudeStatus.Running }?.let { task ->
+                val percent = (task.progress * 100).toInt().coerceIn(0, 100)
+                return ClaudeHomeLine(
+                    text = "✳ Claude: ${task.title.lowercase()} $percent% ›",
+                    needsInput = false,
+                )
+            }
+
+            _tasks.value.firstOrNull { it.status == ClaudeStatus.NeedsYou }?.let { task ->
+                val question = task.question?.takeIf { it.isNotBlank() } ?: task.title
+                return ClaudeHomeLine(
+                    text = "✳ Claude needs you: ${question.truncate(NEEDS_INPUT_MAX_CHARS)} ›",
+                    needsInput = true,
+                )
+            }
+
+            return null
         }
+
+    private val isConfigured: Boolean get() = relayUrl.isNotBlank()
+
+    /**
+     * Sample tasks for the activity feed, behind the settings preview toggle.
+     * Never used by [homeLine] — the Home line only ever reflects real work.
+     */
+    fun setSamplePreview(enabled: Boolean) {
+        if (isConfigured) return
+        _tasks.value = if (enabled) SampleData.claudeTasks() else emptyList()
+    }
 
     fun configure(url: String) {
         if (url == relayUrl) return
@@ -55,7 +91,7 @@ class ClaudeBridge(private val scope: CoroutineScope) {
         pollJob?.cancel()
         if (url.isBlank()) {
             _live.value = false
-            _tasks.value = SampleData.claudeTasks()
+            _tasks.value = emptyList()
             return
         }
         pollJob = scope.launch {
@@ -118,8 +154,12 @@ class ClaudeBridge(private val scope: CoroutineScope) {
             disconnect()
         }
 
+    private fun String.truncate(max: Int): String =
+        if (length <= max) this else take(max - 1).trimEnd() + "…"
+
     private companion object {
         const val TAG = "ClaudeBridge"
+        const val NEEDS_INPUT_MAX_CHARS = 46
         const val POLL_INTERVAL_MS = 20_000L
     }
 }

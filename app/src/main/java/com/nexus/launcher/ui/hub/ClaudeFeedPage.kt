@@ -40,8 +40,6 @@ fun ClaudeFeedPage(
     tasks: List<ClaudeTask>,
     isLive: Boolean,
     modifier: Modifier = Modifier,
-    statusLeft: String = "",
-    statusRight: String = "",
     onReply: (ClaudeTask) -> Unit,
     onOpenOnDesktop: (ClaudeTask) -> Unit,
     onConfigure: () -> Unit,
@@ -51,8 +49,6 @@ fun ClaudeFeedPage(
     HubScaffold(
         title = "✳ Claude",
         modifier = modifier,
-        statusLeft = statusLeft,
-        statusRight = statusRight,
         trailing = {
             Text(
                 text = if (isLive) "$deviceCount devices" else "relay not set",

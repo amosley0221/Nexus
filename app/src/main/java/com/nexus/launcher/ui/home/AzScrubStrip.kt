@@ -36,8 +36,15 @@ import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.roundToInt
 
-/** Sections currently present in the app list, in display order. */
-val AZ_LETTERS: List<Char> = ('A'..'Z').toList() + '#'
+/**
+ * The strip's top entry. Not a section letter — it jumps to the very top of the
+ * list, which is the favourites when any are pinned and the start of A–Z when
+ * they are not.
+ */
+const val STAR_LETTER: Char = '\u2606'
+
+/** Sections the strip can show, in display order. */
+val AZ_LETTERS: List<Char> = listOf(STAR_LETTER) + ('A'..'Z').toList() + '#'
 
 /**
  * State shared between the A–Z strip and the favourites list: which letter the
@@ -55,6 +62,14 @@ class ScrubState {
         internal set
 
     val isScrubbing: Boolean get() = activeLetter != null
+
+    /**
+     * The letter the finger was on when the gesture ended. Release commits this
+     * as the list's new anchor; a cancel leaves it null so the caller can put
+     * the list back where it was.
+     */
+    var committedLetter: Char? = null
+        internal set
 }
 
 @Composable
@@ -70,7 +85,8 @@ fun AzScrubStrip(
     state: ScrubState,
     modifier: Modifier = Modifier,
     onLetterChanged: (Char) -> Unit,
-    onReleased: () -> Unit,
+    onReleased: (committed: Char?) -> Unit,
+    onCancelled: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
     var lastLetter by remember { mutableStateOf<Char?>(null) }
@@ -100,14 +116,21 @@ fun AzScrubStrip(
                         }
                     },
                     onDragEnd = {
+                        // Release commits: the letter under the finger becomes
+                        // the list's anchor and the wave animates away without
+                        // the list moving again.
+                        state.committedLetter = state.activeLetter
                         state.activeLetter = null
                         lastLetter = null
-                        onReleased()
+                        onReleased(state.committedLetter)
                     },
                     onDragCancel = {
+                        // A cancel is not a choice — the list goes back to where
+                        // it was before the scrub started.
+                        state.committedLetter = null
                         state.activeLetter = null
                         lastLetter = null
-                        onReleased()
+                        onCancelled()
                     },
                     onVerticalDrag = { change, _ ->
                         change.consume()

@@ -58,18 +58,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /**
-     * Home favourites. Explicit picks come first in the user's order; if none are
-     * set, the list falls back to the most-used apps so a fresh install is not empty.
+     * Home favourites, in the order the user pinned them. Empty until they pin
+     * something — guessing from usage would put apps on Home that were never
+     * chosen, and there would be no way to tell a guess from a real pin.
      */
     val favorites: StateFlow<List<AppEntry>> =
         combine(visibleApps, settings) { apps, config ->
-            if (config.favorites.isEmpty()) {
-                apps.sortedByDescending { it.usageMillis }
-                    .take(config.maxHomeFavorites)
-                    .sortedBy { it.label.lowercase() }
-            } else {
-                config.favorites.mapNotNull { key -> apps.firstOrNull { it.key == key } }
-            }
+            config.favorites.mapNotNull { key -> apps.firstOrNull { it.key == key } }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val games: StateFlow<List<AppEntry>> =
@@ -110,7 +105,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         refreshApps()
         app.appRepository.registerCallback { refreshApps() }
         viewModelScope.launch {
-            settings.collect { config -> app.claudeBridge.configure(config.claudeRelayUrl) }
+            settings.collect { config ->
+                app.claudeBridge.configure(config.claudeRelayUrl)
+                app.claudeBridge.setSamplePreview(config.claudeSamplePreview)
+            }
         }
     }
 
@@ -128,9 +126,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun toggleFavorite(entry: AppEntry) {
         updateSettings { config ->
-            val current = config.favorites.ifEmpty {
-                favorites.value.map { it.key }
-            }
+            val current = config.favorites
             config.copy(
                 favorites = if (entry.key in current) current - entry.key else current + entry.key
             )

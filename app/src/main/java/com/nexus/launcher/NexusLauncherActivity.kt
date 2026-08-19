@@ -1,6 +1,7 @@
 package com.nexus.launcher
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.AlarmClock
@@ -15,11 +16,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModelProvider
@@ -28,8 +33,12 @@ import com.nexus.launcher.domain.AppEntry
 import com.nexus.launcher.domain.NotificationCard
 import com.nexus.launcher.domain.RomEntry
 import com.nexus.launcher.integration.apps.AppLock
+import com.nexus.launcher.integration.claude.ClaudeHomeLine
 import com.nexus.launcher.integration.emulators.Emulators
 import com.nexus.launcher.integration.media.DeepLinks
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nexus.launcher.ui.common.DefaultLauncherCard
+import com.nexus.launcher.ui.common.LocalWallpaperBitmap
 import com.nexus.launcher.ui.LauncherHost
 import com.nexus.launcher.ui.LauncherScreen
 import com.nexus.launcher.ui.LauncherViewModel
@@ -54,6 +63,9 @@ class NexusLauncherActivity : FragmentActivity() {
     private var overlayRoute by mutableStateOf<OverlayRoute>(OverlayRoute.None)
     private var pendingWidgetPageId: String? = null
 
+    /** Bumped on resume to re-run checks that depend on system state. */
+    private var resumeTick by mutableIntStateOf(0)
+
     private val folderPicker = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
@@ -75,47 +87,93 @@ class NexusLauncherActivity : FragmentActivity() {
         viewModel = ViewModelProvider(this)[LauncherViewModel::class.java]
 
         val app = application as NexusApp
+        handleIntent(intent)
 
         setContent {
             val profile by rememberWindowProfile(this)
             val clock = rememberClockText()
 
-            NexusTheme(windowProfile = profile) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    LauncherScreen(
-                        viewModel = viewModel,
-                        clockText = clock.time,
-                        dateText = clock.date,
-                        host = host,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+            // Read once and share: every hub page blurs the same bitmap.
+            val wallpaperBitmap by app.wallpaperSource.wallpaper.collectAsStateWithLifecycle()
+            LaunchedEffect(Unit) { app.wallpaperSource.refresh() }
+            val wallpaperImage = remember(wallpaperBitmap) {
+                wallpaperBitmap?.asImageBitmap()
+            }
 
-                    // Edit mode and settings render as full-screen overlays over
-                    // the pager rather than separate activities, so the launcher
-                    // never leaves its single task.
-                    AnimatedVisibility(
-                        visible = overlayRoute != OverlayRoute.None,
-                        enter = fadeIn(),
-                        exit = fadeOut(),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(NexusColor.HubBackground)
+            NexusTheme(windowProfile = profile) {
+                CompositionLocalProvider(LocalWallpaperBitmap provides wallpaperImage) {
+                    val settings by viewModel.settings.collectAsStateWithLifecycle()
+
+                    // Re-checked on every resume: the user may have made Nexus
+                    // the default from system settings while we were away.
+                    val needsDefaultPrompt = !settings.defaultLauncherPromptSeen &&
+                        !isDefaultHome(resumeTick)
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        LauncherScreen(
+                            viewModel = viewModel,
+                            clockText = clock.time,
+                            dateText = clock.date,
+                            host = host,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+
+                        // Edit mode and settings render as full-screen overlays over
+                        // the pager rather than separate activities, so the launcher
+                        // never leaves its single task.
+                        AnimatedVisibility(
+                            visible = overlayRoute != OverlayRoute.None,
+                            enter = fadeIn(),
+                            exit = fadeOut(),
                         ) {
-                            LauncherOverlay(
-                                route = overlayRoute,
-                                viewModel = viewModel,
-                                host = host,
-                                widgetHost = app.widgetHost,
-                                onRoute = { overlayRoute = it },
-                                onClose = { overlayRoute = OverlayRoute.None },
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(NexusColor.HubBackground)
+                            ) {
+                                LauncherOverlay(
+                                    route = overlayRoute,
+                                    viewModel = viewModel,
+                                    host = host,
+                                    widgetHost = app.widgetHost,
+                                    onRoute = { overlayRoute = it },
+                                    onClose = { overlayRoute = OverlayRoute.None },
+                                )
+                            }
+                        }
+
+                        if (needsDefaultPrompt) {
+                            DefaultLauncherCard(
+                                modifier = Modifier.fillMaxSize(),
+                                onSetDefault = {
+                                    viewModel.updateSettings {
+                                        it.copy(defaultLauncherPromptSeen = true)
+                                    }
+                                    openHomeSettings()
+                                },
+                                onLater = {
+                                    viewModel.updateSettings {
+                                        it.copy(defaultLauncherPromptSeen = true)
+                                    }
+                                },
                             )
                         }
                     }
                 }
             }
         }
+    }
+
+    /**
+     * True when Nexus is the activity the system would start for HOME. Keyed on
+     * [resumeTick] so the check re-runs after a trip to system settings.
+     */
+    private fun isDefaultHome(@Suppress("UNUSED_PARAMETER") tick: Int): Boolean {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val resolved = runCatching {
+            packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        }.getOrNull()
+        return resolved?.activityInfo?.packageName == packageName
     }
 
     override fun onStart() {
@@ -136,6 +194,7 @@ class NexusLauncherActivity : FragmentActivity() {
         // overlay attach happens here rather than in onCreate.
         app.discoverOverlay.attachWindow(this)
         app.discoverOverlay.onActivityResumed()
+        resumeTick++
     }
 
     override fun onPause() {
@@ -164,6 +223,14 @@ class NexusLauncherActivity : FragmentActivity() {
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent) {
+        if (intent.action == ACTION_OPEN_SETTINGS) {
+            overlayRoute = OverlayRoute.Settings
+            return
+        }
         if (intent.hasCategory(Intent.CATEGORY_HOME)) {
             overlayRoute = OverlayRoute.None
             homePressCount++
@@ -171,7 +238,7 @@ class NexusLauncherActivity : FragmentActivity() {
     }
 
     private val host = object : LauncherHost {
-        override val claudeLine: String?
+        override val claudeLine: ClaudeHomeLine?
             get() = (application as NexusApp).claudeBridge.homeLine
 
         override val homePressCount: Int
@@ -279,6 +346,11 @@ class NexusLauncherActivity : FragmentActivity() {
         override fun openSearch() {
             overlayRoute = OverlayRoute.Settings
         }
+    }
+
+    companion object {
+        /** Sent by [NexusSettingsActivity] to open the settings overlay. */
+        const val ACTION_OPEN_SETTINGS = "com.nexus.launcher.OPEN_SETTINGS"
     }
 
     /** Opens the system picker so the user can make Nexus their Home app. */

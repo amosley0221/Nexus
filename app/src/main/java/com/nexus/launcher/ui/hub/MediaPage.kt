@@ -72,8 +72,6 @@ fun MediaPage(
     continueWatching: List<ContinueItem>,
     library: List<LibraryItem>,
     modifier: Modifier = Modifier,
-    statusLeft: String = "",
-    statusRight: String = "",
     plexConfigured: Boolean = false,
     twitchConfigured: Boolean = false,
     onChannelClick: (LiveChannel) -> Unit,
@@ -89,8 +87,6 @@ fun MediaPage(
     HubScaffold(
         title = "Media",
         modifier = modifier,
-        statusLeft = statusLeft,
-        statusRight = statusRight,
         trailing = {
             Icon(
                 imageVector = Icons.Rounded.Search,

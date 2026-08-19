@@ -201,20 +201,6 @@ fun gradientFor(seed: String): Brush {
     return Brush.linearGradient(listOf(start, end))
 }
 
-/** The system gesture bar stand-in drawn at the bottom of hub pages. */
-@Composable
-fun GestureBar(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        Box(
-            modifier = Modifier
-                .width(120.dp)
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(NexusColor.GestureBar)
-        )
-    }
-}
-
 @Composable
 fun EllipsizedText(
     text: String,

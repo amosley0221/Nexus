@@ -83,6 +83,7 @@ fun LauncherOverlay(
             onToggleVisible = viewModel::togglePageVisible,
             onEditPage = { onRoute(OverlayRoute.PageEditor(it.id)) },
             onAddTemplate = viewModel::addPage,
+            onOpenSettings = { onRoute(OverlayRoute.Settings) },
             onDone = onClose,
         )
 

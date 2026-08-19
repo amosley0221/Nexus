@@ -93,12 +93,23 @@ fun IntegrationSettingsPage(
             )
             Text(
                 text = "Claude Code hooks on your desktop POST task events to this relay; " +
-                    "Nexus polls /tasks and posts replies to /tasks/{id}/reply. " +
-                    "Leave blank to show the sample feed.",
+                    "Nexus polls /tasks and posts replies to /tasks/{id}/reply.",
                 style = NexusType.Meta,
                 color = NexusColor.TextFaint,
-                modifier = Modifier.padding(top = 6.dp, bottom = 20.dp),
+                modifier = Modifier.padding(top = 6.dp),
             )
+
+            ToggleRow(
+                title = "Preview sample data",
+                subtitle = "Fills the Claude feed with example tasks. The Home " +
+                    "status line always shows real work only.",
+                checked = settings.claudeSamplePreview,
+                onCheckedChange = { value ->
+                    onUpdate { it.copy(claudeSamplePreview = value) }
+                },
+            )
+
+            Spacer(Modifier.height(20.dp))
         }
     }
 }

@@ -31,6 +31,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nexus.launcher.domain.AppEntry
+import com.nexus.launcher.integration.claude.ClaudeHomeLine
 import com.nexus.launcher.domain.NotificationCard
 import com.nexus.launcher.domain.PageKind
 import com.nexus.launcher.domain.RomEntry
@@ -39,6 +40,7 @@ import com.nexus.launcher.integration.notifications.NexusNotificationListener
 import com.nexus.launcher.ui.home.HomePage
 import com.nexus.launcher.ui.home.NotificationsOverscroll
 import com.nexus.launcher.ui.home.PageJump
+import com.nexus.launcher.ui.hub.PAGE_INDICATOR_CLEARANCE
 import com.nexus.launcher.ui.home.SearchOverscroll
 import com.nexus.launcher.ui.theme.NexusColor
 import kotlin.math.absoluteValue
@@ -128,11 +130,15 @@ fun LauncherScreen(
         }
     }
 
-    BackHandler(enabled = overlay != Overlay.None || pagerState.currentPage != homeIndex) {
-        if (overlay != Overlay.None) {
-            overlay = Overlay.None
-        } else {
-            scope.launch { pagerState.animateScrollToPage(homeIndex) }
+    // Always enabled. BACK closes an overscroll layer, then returns to Home,
+    // and on Home it does nothing at all — a launcher must never navigate away
+    // from itself and leave the user on whatever was behind it.
+    BackHandler {
+        when {
+            overlay != Overlay.None -> overlay = Overlay.None
+            pagerState.currentPage != homeIndex ->
+                scope.launch { pagerState.animateScrollToPage(homeIndex) }
+            else -> Unit
         }
     }
 
@@ -147,17 +153,13 @@ fun LauncherScreen(
                 )
             },
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding(),
-        ) {
+        // The pager fills the window and the dot row floats over it. Giving the
+        // dots their own row would shorten every page by that much and leave a
+        // band of bare Home wallpaper below each hub page.
+        Box(modifier = Modifier.fillMaxSize()) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxSize(),
                 beyondViewportPageCount = 1,
             ) { index ->
                 val page = activePages.getOrNull(index) ?: return@HorizontalPager
@@ -174,7 +176,11 @@ fun LauncherScreen(
                         onLongPressApp = { host.openAppOptions(it) },
                         onClaudeClick = { host.openClaudeFeed() },
                         onClockClick = { host.openClock() },
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                            .padding(bottom = PAGE_INDICATOR_CLEARANCE),
                     )
                 } else {
                     HubPageContent(
@@ -190,6 +196,9 @@ fun LauncherScreen(
                 pageNames = activePages.map { it.title },
                 currentPage = pagerState.currentPage,
                 onJump = { target -> scope.launch { pagerState.animateScrollToPage(target) } },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding(),
             )
         }
 
@@ -244,7 +253,7 @@ fun LauncherScreen(
  * them behind an interface lets the composables stay free of Android plumbing.
  */
 interface LauncherHost {
-    val claudeLine: String?
+    val claudeLine: ClaudeHomeLine?
     val homePressCount: Int
 
     fun launchApp(entry: AppEntry, bounds: androidx.compose.ui.geometry.Rect?)
