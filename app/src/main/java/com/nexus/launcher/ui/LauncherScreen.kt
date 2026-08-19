@@ -46,6 +46,10 @@ import com.nexus.launcher.ui.theme.NexusColor
 import kotlin.math.absoluteValue
 import kotlinx.coroutines.launch
 
+/** Overlay scroll positions at which the Google feed counts as open or closed. */
+private const val OVERLAY_OPEN = 0.9f
+private const val OVERLAY_CLOSED = 0.05f
+
 /** Which full-screen overlay, if any, is on top of the pager. */
 enum class Overlay { None, Search, Notifications }
 
@@ -121,6 +125,34 @@ fun LauncherScreen(
                     discoverOverlay.openOverlay()
                 } else {
                     discoverOverlay.closeOverlay()
+                }
+            }
+        }
+
+        // The other half of that conversation. Once the feed is open, the Google
+        // window is on top and handles its own dismiss gesture — it closes
+        // without the pager ever hearing about it. The pager would stay parked
+        // on the Discover page, which paints nothing while the overlay is live,
+        // so the user is left on bare wallpaper that cannot swipe back to the
+        // feed. Follow the overlay home when it closes itself.
+        //
+        // Only after having actually seen it open: the echo starts at 0, and
+        // reacting to that would bounce straight off the page on arrival.
+        LaunchedEffect(pagerState, discoverState.isUsable, discoverIndex, homeIndex) {
+            if (!discoverState.isUsable) return@LaunchedEffect
+            var sawOpen = false
+            discoverOverlay.overlayProgress.collect { progress ->
+                when {
+                    progress >= OVERLAY_OPEN -> sawOpen = true
+
+                    sawOpen && progress <= OVERLAY_CLOSED -> {
+                        sawOpen = false
+                        if (!pagerState.isScrollInProgress &&
+                            pagerState.settledPage == discoverIndex
+                        ) {
+                            pagerState.animateScrollToPage(homeIndex)
+                        }
+                    }
                 }
             }
         }
