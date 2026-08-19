@@ -70,6 +70,9 @@ class NexusLauncherActivity : FragmentActivity() {
     /** Bumped on resume to re-run checks that depend on system state. */
     private var resumeTick by mutableIntStateOf(0)
 
+    /** One location prompt per process: a decline should not be nagged. */
+    private var askedForLocation = false
+
     /**
      * Coarse location, asked for only when the weather line is switched on.
      * Declining is a normal answer: the line simply stays empty.
@@ -132,16 +135,24 @@ class NexusLauncherActivity : FragmentActivity() {
                         applySystemBars(settings.hideStatusBar, settings.statusBarGesture)
                     }
 
-                    // Weather is opt-in and needs a position. Ask the first time
-                    // it is switched on, then keep the reading fresh on resume.
+                    // Weather is opt-in and needs a position. Ask whenever it
+                    // is on and the permission is missing — but only once per
+                    // process, so a decline is not re-asked on every resume.
                     LaunchedEffect(settings.showWeather, resumeTick) {
-                        if (!settings.showWeather) return@LaunchedEffect
+                        if (!settings.showWeather) {
+                            app.weather.markDisabled()
+                            return@LaunchedEffect
+                        }
                         if (app.weather.hasLocationPermission) {
                             app.weather.refresh()
-                        } else if (resumeTick == 0) {
+                        } else if (!askedForLocation) {
+                            askedForLocation = true
                             locationPermission.launch(
                                 android.Manifest.permission.ACCESS_COARSE_LOCATION
                             )
+                        } else {
+                            // Nothing to fetch, but the settings row should say why.
+                            app.weather.refresh()
                         }
                     }
 

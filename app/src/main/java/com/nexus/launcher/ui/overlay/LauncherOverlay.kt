@@ -71,6 +71,8 @@ fun LauncherOverlay(
         (context.applicationContext as NexusApp).discoverOverlay
     }
     val discoverState by discoverOverlay.state.collectAsStateWithLifecycle()
+    val weatherStatus by (context.applicationContext as NexusApp).weather.status
+        .collectAsStateWithLifecycle()
     val discoverDiag by discoverOverlay.diagnostics.collectAsStateWithLifecycle()
 
     val discoverDiagnostics = buildString {
@@ -192,6 +194,7 @@ fun LauncherOverlay(
                 (context as? NexusLauncherActivity)?.openHomeSettings()
             },
             discoverDiagnostics = discoverDiagnostics,
+            weatherStatus = weatherStatus,
             onDone = onClose,
         )
 

@@ -5,17 +5,21 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
+import android.os.CancellationSignal
 import androidx.compose.runtime.Immutable
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import kotlin.coroutines.resume
 
 /** Current conditions for the Home date line. */
 @Immutable
@@ -32,14 +36,17 @@ data class WeatherNow(
  * Current conditions from Open-Meteo, which needs no API key and no account —
  * the launcher ships no secret and the user registers nothing.
  *
- * Position comes from the last location the system already has, never a fresh
- * fix: a launcher has no business turning on the GPS, and a coarse cell-tower
- * position from some minutes ago is exact enough to name the temperature.
+ * Position is whatever fix the system already has; only when there is none at
+ * all does it ask for one, and then a single coarse one, never a stream.
  */
 class WeatherSource(private val context: Context) {
 
     private val _state = MutableStateFlow<WeatherNow?>(null)
     val state: StateFlow<WeatherNow?> = _state.asStateFlow()
+
+    /** Plain-language account of the last attempt, for the settings row. */
+    private val _status = MutableStateFlow("Off")
+    val status: StateFlow<String> = _status.asStateFlow()
 
     private var lastFetchAt = 0L
 
@@ -56,36 +63,76 @@ class WeatherSource(private val context: Context) {
     suspend fun refresh(force: Boolean = false) {
         if (!hasLocationPermission) {
             _state.value = null
+            _status.value = "Location permission not granted"
             return
         }
         val now = System.currentTimeMillis()
         if (!force && _state.value != null && now - lastFetchAt < REFRESH_INTERVAL_MS) return
 
+        val location = resolveLocation()
+        if (location == null) {
+            _status.value = "No position available yet — open a maps app once"
+            return
+        }
+
         val reading = withContext(Dispatchers.IO) {
-            val location = lastKnownLocation() ?: return@withContext null
             fetch(location.latitude, location.longitude)
         }
-        if (reading != null) {
-            lastFetchAt = now
-            _state.value = reading
+        if (reading == null) {
+            _status.value = "Could not reach the weather service"
+            return
         }
+
+        lastFetchAt = now
+        _state.value = reading
+        _status.value = "${reading.description} · ${reading.temperature}°"
     }
 
-    private fun lastKnownLocation(): Location? {
+    /** Marks the line as switched off, so the settings row stops explaining itself. */
+    fun markDisabled() {
+        _status.value = "Off"
+    }
+
+    private suspend fun resolveLocation(): Location? {
         val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
             ?: return null
+
         // Network first: it is the coarse provider, it is usually warm, and it
         // does not wake the GPS.
         val providers = listOf(
             LocationManager.NETWORK_PROVIDER,
             LocationManager.PASSIVE_PROVIDER,
             LocationManager.GPS_PROVIDER,
-        )
-        return providers.asSequence()
+        ).filter { provider -> runCatching { manager.isProviderEnabled(provider) }.getOrDefault(false) }
+
+        val cached = providers.asSequence()
             .mapNotNull { provider ->
                 runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
             }
             .maxByOrNull { it.time }
+        if (cached != null) return cached
+
+        // Nothing cached — a phone that has not used location in a while. Ask
+        // for one fix, coarse, with a deadline, and give up quietly if it does
+        // not arrive.
+        val provider = providers.firstOrNull() ?: return null
+        return withTimeoutOrNull(CURRENT_FIX_TIMEOUT_MS) {
+            suspendCancellableCoroutine<Location?> { continuation ->
+                val signal = CancellationSignal()
+                continuation.invokeOnCancellation { runCatching { signal.cancel() } }
+                runCatching {
+                    manager.getCurrentLocation(
+                        provider,
+                        signal,
+                        ContextCompat.getMainExecutor(context),
+                    ) { location ->
+                        if (continuation.isActive) continuation.resume(location)
+                    }
+                }.onFailure {
+                    if (continuation.isActive) continuation.resume(null)
+                }
+            }
+        }
     }
 
     private fun fetch(latitude: Double, longitude: Double): WeatherNow? {
@@ -129,6 +176,7 @@ class WeatherSource(private val context: Context) {
 
     private companion object {
         const val REFRESH_INTERVAL_MS = 30 * 60 * 1000L
+        const val CURRENT_FIX_TIMEOUT_MS = 12_000L
 
         /** WMO weather codes, as Open-Meteo reports them. */
         fun symbolFor(code: Int): String = when (code) {

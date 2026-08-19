@@ -45,6 +45,7 @@ fun SettingsPage(
     onOpenIntegrations: () -> Unit,
     onSetDefaultLauncher: () -> Unit,
     discoverDiagnostics: String,
+    weatherStatus: String,
     onDone: () -> Unit,
 ) {
     HubScaffold(
@@ -191,7 +192,14 @@ fun SettingsPage(
             item {
                 ToggleRow(
                     title = "Weather on Home",
-                    subtitle = "Conditions beside the date · uses coarse location",
+                    // The live status, not a description: weather can fail in
+                    // several quiet ways — no permission, no position, no
+                    // network — and a fixed blurb would hide every one of them.
+                    subtitle = if (settings.showWeather) {
+                        weatherStatus
+                    } else {
+                        "Conditions beside the date · uses coarse location"
+                    },
                     checked = settings.showWeather,
                     onCheckedChange = { value -> onUpdate { it.copy(showWeather = value) } },
                 )
