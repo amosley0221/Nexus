@@ -48,7 +48,7 @@ class AppRepository(private val context: Context) {
                             activityName = info.componentName.className,
                             label = info.label?.toString().orEmpty().ifBlank { info.componentName.packageName },
                             icon = runCatching {
-                                launcherApps.getActivityIcon(info, context.resources.displayMetrics.densityDpi)
+                                info.getIcon(context.resources.displayMetrics.densityDpi)
                             }.getOrNull() ?: runCatching { info.getBadgedIcon(0) }.getOrNull(),
                             isGame = isGame(appInfo),
                             isSystem = appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0,

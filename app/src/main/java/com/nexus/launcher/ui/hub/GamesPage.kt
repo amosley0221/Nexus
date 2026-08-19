@@ -245,7 +245,7 @@ private fun EmulatorsTab(
             columns = GridCells.Fixed(columns),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f),
         ) {
             items(shown, key = { it.uri }) { rom ->
                 RomCard(

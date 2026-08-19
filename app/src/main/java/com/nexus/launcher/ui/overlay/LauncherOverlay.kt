@@ -12,7 +12,7 @@ import com.nexus.launcher.NexusLauncherActivity
 import com.nexus.launcher.domain.AppEntry
 import com.nexus.launcher.domain.PageConfig
 import com.nexus.launcher.domain.RomEntry
-import com.nexus.launcher.integration.apps.AppRepository
+import com.nexus.launcher.NexusApp
 import com.nexus.launcher.integration.emulators.Emulators
 import com.nexus.launcher.integration.notifications.NexusNotificationListener
 import com.nexus.launcher.integration.widgets.NexusWidgetHost
@@ -59,6 +59,9 @@ fun LauncherOverlay(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val pages by viewModel.pages.collectAsStateWithLifecycle()
     val apps by viewModel.allApps.collectAsStateWithLifecycle()
+    val appRepository = remember(context) {
+        (context.applicationContext as NexusApp).appRepository
+    }
 
     BackHandler(enabled = route != OverlayRoute.None) {
         when (route) {
@@ -142,14 +145,14 @@ fun LauncherOverlay(
 
         OverlayRoute.Settings -> SettingsPage(
             settings = settings,
-            usageAccessGranted = remember { AppRepository(context).hasUsageAccess() },
+            usageAccessGranted = appRepository.hasUsageAccess(),
             notificationAccessGranted = NexusNotificationListener.isEnabled(context),
             modifier = Modifier.fillMaxSize(),
             onUpdate = viewModel::updateSettings,
             onOpenAppLock = { onRoute(OverlayRoute.AppLock) },
             onOpenHiddenApps = { onRoute(OverlayRoute.HiddenApps) },
             onOpenFavorites = { onRoute(OverlayRoute.Favorites) },
-            onRequestUsageAccess = { AppRepository(context).requestUsageAccess() },
+            onRequestUsageAccess = { appRepository.requestUsageAccess() },
             onRequestNotificationAccess = { NexusNotificationListener.requestAccess(context) },
             onPickRomFolder = { host.pickRomFolder() },
             onOpenIntegrations = { onRoute(OverlayRoute.Integrations) },
@@ -245,11 +248,11 @@ fun LauncherOverlay(
                         onClose()
                     },
                     SheetAction(label = "App info") {
-                        AppRepository(context).openAppInfo(entry)
+                        appRepository.openAppInfo(entry)
                         onClose()
                     },
                     SheetAction(label = "Uninstall", destructive = true) {
-                        AppRepository(context).requestUninstall(entry)
+                        appRepository.requestUninstall(entry)
                         onClose()
                     },
                 ),

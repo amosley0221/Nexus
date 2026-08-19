@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -243,7 +244,7 @@ private fun ContinueCard(item: ContinueItem, modifier: Modifier = Modifier, onCl
             .clip(RoundedCornerShape(NexusRadius.Card))
             .clickable(onClick = onClick),
     ) {
-        GradientArt(seed = item.title, modifier = Modifier.fillMaxWidth().height(200.dp))
+        GradientArt(seed = item.title, modifier = Modifier.fillMaxSize())
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -280,7 +281,7 @@ private fun PosterCard(item: LibraryItem, modifier: Modifier = Modifier, onClick
                 .aspectRatio(1.4f)
                 .clip(RoundedCornerShape(NexusRadius.Card)),
         ) {
-            GradientArt(seed = item.title, modifier = Modifier.fillMaxWidth().height(160.dp))
+            GradientArt(seed = item.title, modifier = Modifier.fillMaxSize())
             Text(
                 text = item.title,
                 style = NexusType.CardTitle,

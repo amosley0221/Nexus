@@ -254,7 +254,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val folders = (settings.value.romFolderUris + extraUris).distinct()
             if (folders.isEmpty()) return@launch
-            val found = Emulators.scanFolders(getApplication(), folders)
+            val found = Emulators.scanFolders(app, folders)
             repo.updateRoms { existing ->
                 // Preserve any per-ROM choices the user already made.
                 found.map { rom ->

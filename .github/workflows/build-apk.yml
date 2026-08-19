@@ -24,7 +24,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+        run: |
+          set +e
+          ./gradlew :app:assembleDebug 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "===== COMPILER DIAGNOSTICS ====="
+            grep -E "^(e|w): |FAILURE:|What went wrong|^> " build.log | head -200
+            echo "===== END DIAGNOSTICS ====="
+          fi
+          exit $status
 
       - name: Rename APK
         run: |
