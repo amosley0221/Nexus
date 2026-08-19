@@ -62,6 +62,30 @@ fun LauncherOverlay(
     val appRepository = remember(context) {
         (context.applicationContext as NexusApp).appRepository
     }
+    val discoverState by remember(context) {
+        (context.applicationContext as NexusApp).discoverOverlay.state
+    }.collectAsStateWithLifecycle()
+
+    val discoverDiagnostics = buildString {
+        append(if (discoverState.companionInstalled) "companion ✓" else "companion ✗")
+        append(if (discoverState.bridgeBound) " · bridge ✓" else " · bridge ✗")
+        append(if (discoverState.overlayConnected) " · google ✓" else " · google ✗")
+        append(if (discoverState.windowAttached) " · window ✓" else " · window ✗")
+        append(if (discoverState.hasContent) " · content ✓" else " · content ✗")
+        append("\nstatus=")
+        append(if (discoverState.lastStatus < 0) "never" else discoverState.lastStatus.toString())
+        append(" · scroll=")
+        append(
+            if (discoverState.lastReportedScroll < 0f) "never"
+            else "%.2f".format(discoverState.lastReportedScroll)
+        )
+        append(" · activity=")
+        append(discoverState.lastActivityState)
+        discoverState.unavailableReason?.let {
+            append("\n")
+            append(it)
+        }
+    }
 
     BackHandler(enabled = route != OverlayRoute.None) {
         when (route) {
@@ -160,6 +184,7 @@ fun LauncherOverlay(
             onSetDefaultLauncher = {
                 (context as? NexusLauncherActivity)?.openHomeSettings()
             },
+            discoverDiagnostics = discoverDiagnostics,
             onDone = onClose,
         )
 

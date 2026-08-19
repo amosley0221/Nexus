@@ -44,6 +44,7 @@ fun SettingsPage(
     onPickRomFolder: () -> Unit,
     onOpenIntegrations: () -> Unit,
     onSetDefaultLauncher: () -> Unit,
+    discoverDiagnostics: String,
     onDone: () -> Unit,
 ) {
     HubScaffold(
@@ -276,6 +277,17 @@ fun SettingsPage(
                     onClick = onOpenIntegrations,
                 )
             }
+            item {
+                // The Discover page is transparent whenever the overlay is live,
+                // so when the feed does not appear there is nothing on it to
+                // explain why. This is where that state is readable.
+                NavigationRow(
+                    title = "Discover feed status",
+                    subtitle = discoverDiagnostics,
+                    subtitleMaxLines = 5,
+                    onClick = onOpenIntegrations,
+                )
+            }
 
             item { Spacer(Modifier.height(24.dp)) }
         }
@@ -336,6 +348,7 @@ fun NavigationRow(
     title: String,
     subtitle: String?,
     accent: Boolean = false,
+    subtitleMaxLines: Int = 2,
     onClick: () -> Unit,
 ) {
     Row(
@@ -352,7 +365,7 @@ fun NavigationRow(
                     text = subtitle,
                     style = NexusType.Meta,
                     color = if (accent) NexusColor.Amber else NexusColor.TextSecondary,
-                    maxLines = 2,
+                    maxLines = subtitleMaxLines,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

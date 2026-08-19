@@ -26,6 +26,18 @@ data class DiscoverOverlayState(
     val hasContent: Boolean = false,
     /** Why the feed is unavailable, or null when it is working. */
     val unavailableReason: String? = null,
+
+    // Diagnostics. This is a reverse-engineered protocol against an app that
+    // gives no error feedback — when the feed does not appear, these are the
+    // only way to tell which step failed. Surfaced on the companion's screen.
+    /** The Google app accepted the launcher's window. */
+    val windowAttached: Boolean = false,
+    /** Last status bitmask the Google app reported. -1 = never reported. */
+    val lastStatus: Int = -1,
+    /** Last scroll position the Google app echoed back. */
+    val lastReportedScroll: Float = -1f,
+    /** Started/resumed bits last sent to the Google app. */
+    val lastActivityState: Int = 0,
 ) {
     /** True only when the feed can actually be shown. */
     val isUsable: Boolean get() = bridgeBound && overlayConnected
@@ -52,6 +64,18 @@ class DiscoverOverlayController(private val context: Context) {
     private var bound = false
     private var attachedActivity: Activity? = null
 
+    /**
+     * Current started/resumed bits.
+     *
+     * Android runs onStart and onResume *before* onAttachedToWindow, and the
+     * bridge binds asynchronously on top of that — so the first activity-state
+     * calls routinely land before there is anything to receive them. Keeping the
+     * state here and re-sending it after every successful attach is what stops
+     * the Google app from holding a window it thinks belongs to a paused
+     * activity, which leaves the feed closed behind a blank page.
+     */
+    private var activityState: Int = 0
+
     /** Mirrors the overlay's own scroll so the pager can stay in step with it. */
     private val _overlayProgress = MutableStateFlow(0f)
     val overlayProgress: StateFlow<Float> = _overlayProgress.asStateFlow()
@@ -59,11 +83,13 @@ class DiscoverOverlayController(private val context: Context) {
     private val callback = object : INexusOverlayCallback.Stub() {
         override fun overlayScrollChanged(progress: Float) {
             _overlayProgress.value = progress
+            _state.value = _state.value.copy(lastReportedScroll = progress)
         }
 
         override fun overlayStatusChanged(status: Int) {
             _state.value = _state.value.copy(
                 hasContent = status and STATUS_ATTACHED != 0,
+                lastStatus = status,
             )
         }
 
@@ -171,12 +197,22 @@ class DiscoverOverlayController(private val context: Context) {
             false
         }
 
-        if (!attached) {
+        if (attached) {
+            // Re-assert everything the overlay was told before it had a window.
+            applyActivityState()
+            refreshContentFlag()
+        } else {
             _state.value = _state.value.copy(
                 unavailableReason = runCatching { bridge.unavailableReason }.getOrNull()
                     ?: "The Google app did not accept the overlay window.",
             )
         }
+        _state.value = _state.value.copy(windowAttached = attached)
+    }
+
+    private fun applyActivityState() {
+        call { setActivityState(activityState) }
+        _state.value = _state.value.copy(lastActivityState = activityState)
     }
 
     fun detachWindow(isChangingConfigurations: Boolean) {
@@ -195,20 +231,28 @@ class DiscoverOverlayController(private val context: Context) {
 
     fun closeOverlay() = call { closeOverlay(OPTION_ANIMATE) }
 
-    fun onActivityStarted() = call { setActivityState(ACTIVITY_STARTED) }
+    fun onActivityStarted() {
+        activityState = ACTIVITY_STARTED
+        applyActivityState()
+    }
 
     fun onActivityResumed() {
-        call { setActivityState(ACTIVITY_STARTED or ACTIVITY_RESUMED) }
+        activityState = ACTIVITY_STARTED or ACTIVITY_RESUMED
+        applyActivityState()
         call { onLauncherResume() }
         refreshContentFlag()
     }
 
     fun onActivityPaused() {
-        call { setActivityState(ACTIVITY_STARTED) }
+        activityState = ACTIVITY_STARTED
+        applyActivityState()
         call { onLauncherPause() }
     }
 
-    fun onActivityStopped() = call { setActivityState(0) }
+    fun onActivityStopped() {
+        activityState = 0
+        applyActivityState()
+    }
 
     private fun refreshContentFlag() {
         val bridge = overlay ?: return
