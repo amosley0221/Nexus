@@ -13,21 +13,47 @@ android {
         applicationId = "com.nexus.launcher"
         minSdk = 30
         targetSdk = 35
-        versionCode = 1
+        // CI passes its run number so successive builds are distinguishable on
+        // the phone and never look like a downgrade.
+        versionCode = (System.getenv("NEXUS_VERSION_CODE") ?: "1").toInt()
         versionName = "0.1.0"
         vectorDrawables.useSupportLibrary = true
+    }
+
+
+    /**
+     * One stable key for every build. Without this each machine — and every
+     * ephemeral CI runner — would auto-generate its own debug keystore, so each
+     * APK would carry a different signature and Android would refuse to install
+     * it over the last one. It also keeps the launcher and the companion
+     * signature-matched, which the overlay bridge requires.
+     *
+     * Set the NEXUS_KEYSTORE_* environment variables to sign with a private key
+     * instead of the committed one.
+     */
+    signingConfigs {
+        create("nexus") {
+            val keystorePath = System.getenv("NEXUS_KEYSTORE_PATH")
+                ?: providers.gradleProperty("nexusKeystoreFile").get()
+            storeFile = rootProject.file(keystorePath)
+            storePassword = System.getenv("NEXUS_KEYSTORE_PASSWORD")
+                ?: providers.gradleProperty("nexusKeystorePassword").get()
+            keyAlias = System.getenv("NEXUS_KEY_ALIAS")
+                ?: providers.gradleProperty("nexusKeyAlias").get()
+            keyPassword = System.getenv("NEXUS_KEY_PASSWORD")
+                ?: providers.gradleProperty("nexusKeyPassword").get()
+        }
     }
 
     buildTypes {
         debug {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("nexus")
         }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so `assembleRelease` still produces an
-            // installable APK in CI. Swap in a real keystore before distributing.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("nexus")
         }
     }
 

@@ -24,6 +24,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build debug APK
+        env:
+          # Successive builds get increasing version codes so the phone can tell
+          # them apart and never treats an update as a downgrade.
+          NEXUS_VERSION_CODE: ${{ github.run_number }}
         run: |
           set +e
           ./gradlew :app:assembleDebug :companion:assembleDebug 2>&1 | tee build.log
@@ -41,6 +45,21 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk "out/Nexus-debug.apk"
           cp companion/build/outputs/apk/debug/companion-debug.apk "out/NexusCompanion-debug.apk"
           ls -la out
+
+      - name: Verify both APKs share one signer
+        run: |
+          # The launcher and the companion must be signature-identical: Android
+          # blocks updates across a signature change, and the overlay bridge
+          # only accepts a launcher signed with the companion's key.
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          app_cert=$("$APKSIGNER" verify --print-certs out/Nexus-debug.apk | grep -m1 'SHA-256 digest')
+          companion_cert=$("$APKSIGNER" verify --print-certs out/NexusCompanion-debug.apk | grep -m1 'SHA-256 digest')
+          echo "launcher:  $app_cert"
+          echo "companion: $companion_cert"
+          if [ "$app_cert" != "$companion_cert" ]; then
+            echo "::error::APK signers differ - the overlay bridge would be rejected"
+            exit 1
+          fi
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4

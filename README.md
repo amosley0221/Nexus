@@ -31,6 +31,35 @@ To build locally instead, with Android Studio or a configured SDK:
 # app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## Signing
+
+Every build — local or CI — is signed with the committed key at
+`keystore/nexus.jks`, so a new APK installs straight over the last one.
+
+This matters more than it looks. Android refuses to update an app whose
+signature changed, and the Android debug key is *auto-generated per machine*: an
+ephemeral CI runner makes a fresh one on every run. Left on the default, each
+build would carry a different signature and every install would fail until you
+uninstalled first. The companion's overlay bridge also only accepts a launcher
+signed with its own key, so the two APKs must match each other as well.
+
+The committed key is a self-signed development key, not a release key. It is in
+the repository on purpose so builds are reproducible and updatable — but the
+repository is public, so treat it as public: anyone can sign an APK that claims
+to be `com.nexus.launcher`, including one the companion would accept. To sign
+with a key of your own instead, set these before building and nothing else
+changes:
+
+```
+NEXUS_KEYSTORE_PATH      path to your keystore, relative to the repo root
+NEXUS_KEYSTORE_PASSWORD
+NEXUS_KEY_ALIAS
+NEXUS_KEY_PASSWORD
+```
+
+Switching keys means one final uninstall-and-reinstall, since the signature
+changes that once.
+
 ## First run
 
 1. Install, then press Home and pick **Nexus** — or open Nexus and use
