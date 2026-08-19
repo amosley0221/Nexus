@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Binder
+import android.os.Process
 import android.os.IBinder
 import android.os.RemoteCallbackList
 import android.util.Log
@@ -69,18 +70,31 @@ class NexusOverlayService : Service() {
     private fun currentState() = ConnectionState(client.isConnected, client.unavailableReason)
 
     /**
-     * Rejects any caller that is not the Nexus launcher. The manifest permission
-     * already limits this to apps signed with the companion's key; this closes
-     * the gap where the same developer ships another app with that key.
+     * Rejects any caller that is not the Nexus launcher signed with this
+     * companion's own key.
+     *
+     * Both halves matter. The package check alone would let anyone who
+     * side-loads an app claiming that package name through; the signature check
+     * alone would let any other app of ours through. Attaching the overlay hands
+     * over the launcher's window token, so neither is worth being loose about.
      */
     private fun requireLauncherCaller() {
         val uid = Binder.getCallingUid()
-        if (uid == android.os.Process.myUid()) return
+        if (uid == Process.myUid()) return
 
         val callers = packageManager.getPackagesForUid(uid).orEmpty()
         if (LAUNCHER_PACKAGE !in callers) {
             Log.w(TAG, "Rejected overlay call from uid $uid (${callers.joinToString()})")
             throw SecurityException("Only $LAUNCHER_PACKAGE may use the Nexus overlay bridge")
+        }
+
+        @Suppress("DEPRECATION")
+        val signatureMatch = packageManager.checkSignatures(uid, Process.myUid())
+        if (signatureMatch != PackageManager.SIGNATURE_MATCH) {
+            Log.w(TAG, "Rejected overlay call: caller signature does not match (uid $uid)")
+            throw SecurityException(
+                "$LAUNCHER_PACKAGE must be signed with the same key as the companion"
+            )
         }
     }
 

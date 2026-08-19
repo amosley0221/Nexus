@@ -1,15 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!--
-      Signature-level: only an app signed with the same key as this companion
-      may bind the overlay service. Nexus and the companion are built and
-      signed together, so the launcher qualifies and nothing else does.
-    -->
-    <permission
-        android:name="com.nexus.companion.permission.BIND_OVERLAY"
-        android:protectionLevel="signature" />
-
     <queries>
         <package android:name="com.google.android.googlequicksearchbox" />
         <package android:name="com.nexus.launcher" />
@@ -36,10 +27,16 @@
             </intent-filter>
         </activity>
 
+        <!--
+          Exported so the launcher can bind it. Access is enforced inside the
+          service: every call checks the caller is the Nexus launcher AND is
+          signed with this companion's key. A manifest permission is not used
+          because signature permissions are granted at install time, which would
+          break whenever the launcher happened to be installed first.
+        -->
         <service
             android:name=".NexusOverlayService"
-            android:exported="true"
-            android:permission="com.nexus.companion.permission.BIND_OVERLAY">
+            android:exported="true">
             <intent-filter>
                 <action android:name="com.nexus.companion.OVERLAY_BRIDGE" />
             </intent-filter>
