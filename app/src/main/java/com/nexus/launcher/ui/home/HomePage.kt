@@ -42,7 +42,10 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nexus.launcher.data.NexusSettings
@@ -132,7 +135,7 @@ private fun HomePortrait(
             modifier = Modifier.padding(
                 start = profile.homePadding,
                 end = profile.homePadding,
-                top = 26.dp,
+                top = 34.dp,
             ),
         )
 
@@ -205,9 +208,13 @@ private fun HomeLandscape(
 }
 
 /**
- * The clock, stacked: the hour on one line and the minutes below it in the
- * accent, tight enough that the two read as one block. The whole stack gives a
- * small bounce as the minute rolls over.
+ * The clock. One line, two tones: the hour in white, the colon and minutes in
+ * the accent, the meridiem small and grey beside them — and a spring bounce as
+ * the minute rolls over.
+ *
+ * Deliberately a single [Text] over an annotated string rather than a Text per
+ * part. Stacking them left a gap: Baloo2's line metrics do not collapse to the
+ * leading you ask for, so the parts drifted apart instead of nesting.
  */
 @Composable
 private fun ClockBlock(
@@ -218,20 +225,38 @@ private fun ClockBlock(
     modifier: Modifier = Modifier,
 ) {
     val profile = LocalWindowProfile.current
-    // Two stacked lines are taller than the single line this replaced, so the
-    // digits come down a little to keep the list the same length.
-    val digitScale = profile.clockScale * 0.84f
-    val digitSize = NexusType.Clock.fontSize.value * digitScale
+    val digitSize = NexusType.Clock.fontSize.value * profile.clockScale
     val digitStyle = NexusType.Clock.copy(
         fontSize = digitSize.sp,
-        // Leading below the glyph height: the two lines nest instead of sitting
-        // in separate boxes.
-        lineHeight = (digitSize * 0.84f).sp,
+        lineHeight = (NexusType.Clock.lineHeight.value * profile.clockScale).sp,
     )
+
+    val face = remember(clock.hour, clock.minute, clock.meridiem) {
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = NexusColor.OnWallpaper)) { append(clock.hour) }
+            // The separator sits back so the two halves read as two colours
+            // rather than three.
+            withStyle(SpanStyle(color = NexusColor.Accent.copy(alpha = 0.5f))) { append(":") }
+            withStyle(SpanStyle(color = NexusColor.Accent)) { append(clock.minute) }
+            if (clock.meridiem.isNotEmpty()) {
+                withStyle(
+                    SpanStyle(
+                        color = NexusColor.TextSecondary,
+                        fontSize = (digitSize * 0.24f).sp,
+                        // The clock face is tracked tight; the meridiem is not.
+                        letterSpacing = 0.sp,
+                    ),
+                ) {
+                    append("  ")
+                    append(clock.meridiem)
+                }
+            }
+        }
+    }
 
     val bounce = remember { Animatable(1f) }
     LaunchedEffect(clock.minute) {
-        bounce.snapTo(0.93f)
+        bounce.snapTo(0.94f)
         bounce.animateTo(
             targetValue = 1f,
             animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -239,7 +264,9 @@ private fun ClockBlock(
     }
 
     Column(modifier = modifier) {
-        Column(
+        Text(
+            text = face,
+            style = digitStyle,
             modifier = Modifier
                 .graphicsLayer {
                     // Anchored at the left edge so the bounce grows out of the
@@ -249,31 +276,9 @@ private fun ClockBlock(
                     scaleY = bounce.value
                 }
                 .clickable(onClick = onClockClick),
-        ) {
-            Text(
-                text = clock.hour,
-                style = digitStyle,
-                color = NexusColor.OnWallpaper,
-            )
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = clock.minute,
-                    style = digitStyle,
-                    color = NexusColor.Accent,
-                )
-                if (clock.meridiem.isNotEmpty()) {
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = clock.meridiem,
-                        style = NexusType.DateLine.copy(fontSize = (digitSize * 0.22f).sp),
-                        color = NexusColor.TextSecondary,
-                        modifier = Modifier.padding(bottom = (digitSize * 0.14f).dp),
-                    )
-                }
-            }
-        }
+        )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
         Text(
             text = clock.date,
             style = NexusType.DateLine,
