@@ -267,8 +267,10 @@ private fun ClockBlock(
     }
 
     Column(modifier = modifier) {
+        // Aligned on the baseline, not the bottom: the clock's line box runs a
+        // long way below its glyphs, so bottom-aligning dropped the meridiem
+        // into that empty band instead of setting it beside the digits.
         Row(
-            verticalAlignment = Alignment.Bottom,
             modifier = Modifier
                 .graphicsLayer {
                     // Anchored at the left edge so the bounce grows out of the
@@ -285,13 +287,17 @@ private fun ClockBlock(
                 color = NexusColor.OnWallpaper,
                 // Drawn above the minutes, so the hour stays whole where the
                 // two overlap and the minutes are the ones that give way.
-                modifier = Modifier.zIndex(1f),
+                modifier = Modifier
+                    .alignByBaseline()
+                    .zIndex(1f),
             )
             Text(
                 text = clock.minute,
                 style = digitStyle,
                 color = NexusColor.Accent,
-                modifier = Modifier.offset(x = -overlap),
+                modifier = Modifier
+                    .alignByBaseline()
+                    .offset(x = -overlap),
             )
             if (clock.meridiem.isNotEmpty()) {
                 Text(
@@ -299,8 +305,8 @@ private fun ClockBlock(
                     style = NexusType.DateLine.copy(fontSize = (digitSize * 0.22f).sp),
                     color = NexusColor.TextSecondary,
                     modifier = Modifier
-                        .offset(x = -overlap + 4.dp)
-                        .padding(bottom = (digitSize * 0.13f).dp),
+                        .alignByBaseline()
+                        .offset(x = -overlap + 6.dp),
                 )
             }
         }
