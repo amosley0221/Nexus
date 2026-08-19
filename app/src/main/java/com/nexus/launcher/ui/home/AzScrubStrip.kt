@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -148,11 +149,27 @@ fun AzScrubStrip(
         verticalArrangement = Arrangement.SpaceEvenly,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        letters.forEach { letter ->
+        letters.forEachIndexed { index, letter ->
             Text(
                 text = letter.toString(),
                 style = NexusType.AzLetter,
                 color = if (state.activeLetter == letter) NexusColor.Accent else NexusColor.OnWallpaper,
+                // The wave belongs to the alphabet, not the app list: the
+                // letters bow out toward the finger and the rows stay put.
+                //
+                // Positions are derived from the index rather than measured,
+                // since the letters are evenly spaced down the strip — and
+                // reading the scrub state inside graphicsLayer keeps this a
+                // draw-phase transform, so a moving wave never recomposes.
+                modifier = Modifier.graphicsLayer {
+                    val spacing = state.stripHeight / letters.size
+                    val letterCenter = spacing * (index + 0.5f)
+                    translationX = waveOffsetDp(
+                        positionY = letterCenter,
+                        touchY = state.touchY,
+                        active = state.isScrubbing,
+                    ) * density
+                },
             )
         }
     }
@@ -190,18 +207,19 @@ fun ScrubBubble(state: ScrubState, modifier: Modifier = Modifier) {
 }
 
 /**
- * Horizontal offset for a row during a scrub: a Gaussian wave centred on the
- * finger, peaking at [MAX_WAVE_OFFSET_DP] and falling off over ~90px either side.
- * Rows cascade to the LEFT, so the offset is negative.
+ * Horizontal offset for a letter during a scrub: a Gaussian wave centred on the
+ * finger, peaking at [MAX_WAVE_OFFSET_DP] and falling off over ~90px either
+ * side, which is what bows the alphabet out into an arc. Letters cascade to the
+ * LEFT, so the offset is negative.
  */
-fun waveOffsetDp(rowCenterY: Float, touchY: Float, active: Boolean): Float {
+fun waveOffsetDp(positionY: Float, touchY: Float, active: Boolean): Float {
     if (!active) return 0f
-    val distance = abs(rowCenterY - touchY)
+    val distance = abs(positionY - touchY)
     val falloff = exp(-(distance * distance) / (2f * SIGMA * SIGMA))
     return -(MAX_WAVE_OFFSET_DP * falloff)
 }
 
-/** Peak slide of the row nearest the finger, in dp. */
+/** Peak slide of the letter nearest the finger, in dp. */
 const val MAX_WAVE_OFFSET_DP = 140f
 
 /** Standard deviation of the Gaussian, in pixels. */
