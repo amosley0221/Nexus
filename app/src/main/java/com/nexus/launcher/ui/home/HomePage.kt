@@ -256,6 +256,9 @@ private fun ClockBlock(
     // How far the minutes slide back under the hour. A share of the type size,
     // so it holds at every clock scale.
     val overlap = (digitSize * 0.13f).dp
+    // How far the digits come down to land beside the meridiem. Drawn-only, not
+    // laid out: the row keeps its height, so nothing below it moves.
+    val digitDrop = (digitSize * 0.32f).dp
 
     val bounce = remember { Animatable(1f) }
     LaunchedEffect(clock.minute) {
@@ -267,10 +270,12 @@ private fun ClockBlock(
     }
 
     Column(modifier = modifier) {
-        // Aligned on the baseline, not the bottom: the clock's line box runs a
-        // long way below its glyphs, so bottom-aligning dropped the meridiem
-        // into that empty band instead of setting it beside the digits.
+        // The meridiem keeps the place bottom alignment gives it, and the digits
+        // come down to meet it. Baloo2's line box runs a long way below its
+        // glyphs, and the digits sit at the top of that band while the meridiem
+        // sits at the foot of it — so the digits are the ones out of place.
         Row(
+            verticalAlignment = Alignment.Bottom,
             modifier = Modifier
                 .graphicsLayer {
                     // Anchored at the left edge so the bounce grows out of the
@@ -288,16 +293,14 @@ private fun ClockBlock(
                 // Drawn above the minutes, so the hour stays whole where the
                 // two overlap and the minutes are the ones that give way.
                 modifier = Modifier
-                    .alignByBaseline()
+                    .offset(y = digitDrop)
                     .zIndex(1f),
             )
             Text(
                 text = clock.minute,
                 style = digitStyle,
                 color = NexusColor.Accent,
-                modifier = Modifier
-                    .alignByBaseline()
-                    .offset(x = -overlap),
+                modifier = Modifier.offset(x = -overlap, y = digitDrop),
             )
             if (clock.meridiem.isNotEmpty()) {
                 Text(
@@ -305,8 +308,8 @@ private fun ClockBlock(
                     style = NexusType.DateLine.copy(fontSize = (digitSize * 0.22f).sp),
                     color = NexusColor.TextSecondary,
                     modifier = Modifier
-                        .alignByBaseline()
-                        .offset(x = -overlap + 6.dp),
+                        .offset(x = -overlap + 4.dp)
+                        .padding(bottom = (digitSize * 0.13f).dp),
                 )
             }
         }
@@ -317,7 +320,7 @@ private fun ClockBlock(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.offset(y = (-digitSize * 0.14f).dp),
+            modifier = Modifier.offset(y = (-digitSize * 0.05f).dp),
         ) {
             Text(
                 text = clock.date,
