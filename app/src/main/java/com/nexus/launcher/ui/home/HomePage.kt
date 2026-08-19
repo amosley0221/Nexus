@@ -1,5 +1,8 @@
 package com.nexus.launcher.ui.home
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -28,8 +31,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -37,37 +38,36 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.nexus.launcher.data.IconPackMode
 import com.nexus.launcher.data.NexusSettings
 import com.nexus.launcher.domain.AppEntry
 import com.nexus.launcher.integration.claude.ClaudeHomeLine
+import com.nexus.launcher.ui.clock.ClockText
 import com.nexus.launcher.ui.common.AppIcon
-import com.nexus.launcher.ui.layout.WindowProfile
 import com.nexus.launcher.ui.theme.LocalWindowProfile
 import com.nexus.launcher.ui.theme.NexusColor
 import com.nexus.launcher.ui.theme.NexusType
 import kotlinx.coroutines.launch
 
 /**
- * Home: clock, date, optional Claude line, the Niagara-style favourites list,
- * and the A–Z strip. The window is transparent, so the system wallpaper is the
- * background — nothing is drawn behind this content.
+ * Home: clock, date, optional Claude line, the pinned favourites, and the A–Z
+ * strip. The window is transparent, so the system wallpaper is the background —
+ * nothing is drawn behind this content.
  */
 @Composable
 fun HomePage(
     apps: List<AppEntry>,
     favorites: List<AppEntry>,
     settings: NexusSettings,
-    clockText: String,
-    dateText: String,
+    clock: ClockText,
     claudeLine: ClaudeHomeLine?,
+    resetToken: Int,
     modifier: Modifier = Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
@@ -81,9 +81,9 @@ fun HomePage(
             apps = apps,
             favorites = favorites,
             settings = settings,
-            clockText = clockText,
-            dateText = dateText,
+            clock = clock,
             claudeLine = claudeLine,
+            resetToken = resetToken,
             modifier = modifier,
             onLaunch = onLaunch,
             onLongPressApp = onLongPressApp,
@@ -95,9 +95,9 @@ fun HomePage(
             apps = apps,
             favorites = favorites,
             settings = settings,
-            clockText = clockText,
-            dateText = dateText,
+            clock = clock,
             claudeLine = claudeLine,
+            resetToken = resetToken,
             modifier = modifier,
             onLaunch = onLaunch,
             onLongPressApp = onLongPressApp,
@@ -112,9 +112,9 @@ private fun HomePortrait(
     apps: List<AppEntry>,
     favorites: List<AppEntry>,
     settings: NexusSettings,
-    clockText: String,
-    dateText: String,
+    clock: ClockText,
     claudeLine: ClaudeHomeLine?,
+    resetToken: Int,
     modifier: Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
@@ -125,15 +125,14 @@ private fun HomePortrait(
 
     Column(modifier = modifier.fillMaxSize()) {
         ClockBlock(
-            clockText = clockText,
-            dateText = dateText,
+            clock = clock,
             claudeLine = claudeLine.takeIf { settings.showClaudeStatus },
             onClaudeClick = onClaudeClick,
             onClockClick = onClockClick,
             modifier = Modifier.padding(
                 start = profile.homePadding,
                 end = profile.homePadding,
-                top = 34.dp,
+                top = 26.dp,
             ),
         )
 
@@ -144,6 +143,7 @@ private fun HomePortrait(
             favorites = favorites,
             settings = settings,
             columns = profile.homeColumns,
+            resetToken = resetToken,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
@@ -159,9 +159,9 @@ private fun HomeLandscape(
     apps: List<AppEntry>,
     favorites: List<AppEntry>,
     settings: NexusSettings,
-    clockText: String,
-    dateText: String,
+    clock: ClockText,
     claudeLine: ClaudeHomeLine?,
+    resetToken: Int,
     modifier: Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
@@ -182,8 +182,7 @@ private fun HomeLandscape(
             contentAlignment = Alignment.CenterStart,
         ) {
             ClockBlock(
-                clockText = clockText,
-                dateText = dateText,
+                clock = clock,
                 claudeLine = claudeLine.takeIf { settings.showClaudeStatus },
                 onClaudeClick = onClaudeClick,
                 onClockClick = onClockClick,
@@ -195,6 +194,7 @@ private fun HomeLandscape(
             favorites = favorites,
             settings = settings,
             columns = 1,
+            resetToken = resetToken,
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(),
@@ -204,31 +204,78 @@ private fun HomeLandscape(
     }
 }
 
+/**
+ * The clock, stacked: the hour on one line and the minutes below it in the
+ * accent, tight enough that the two read as one block. The whole stack gives a
+ * small bounce as the minute rolls over.
+ */
 @Composable
 private fun ClockBlock(
-    clockText: String,
-    dateText: String,
+    clock: ClockText,
     claudeLine: ClaudeHomeLine?,
     onClaudeClick: () -> Unit,
     onClockClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val profile = LocalWindowProfile.current
-    val clockStyle = NexusType.Clock.copy(
-        fontSize = (NexusType.Clock.fontSize.value * profile.clockScale).sp,
-        lineHeight = (NexusType.Clock.lineHeight.value * profile.clockScale).sp,
+    // Two stacked lines are taller than the single line this replaced, so the
+    // digits come down a little to keep the list the same length.
+    val digitScale = profile.clockScale * 0.84f
+    val digitSize = NexusType.Clock.fontSize.value * digitScale
+    val digitStyle = NexusType.Clock.copy(
+        fontSize = digitSize.sp,
+        // Leading below the glyph height: the two lines nest instead of sitting
+        // in separate boxes.
+        lineHeight = (digitSize * 0.84f).sp,
     )
 
-    Column(modifier = modifier) {
-        Text(
-            text = clockText,
-            style = clockStyle,
-            color = NexusColor.Accent,
-            modifier = Modifier.clickable(onClick = onClockClick),
+    val bounce = remember { Animatable(1f) }
+    LaunchedEffect(clock.minute) {
+        bounce.snapTo(0.93f)
+        bounce.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         )
-        Spacer(Modifier.height(10.dp))
+    }
+
+    Column(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .graphicsLayer {
+                    // Anchored at the left edge so the bounce grows out of the
+                    // margin rather than swelling around the centre.
+                    transformOrigin = TransformOrigin(0f, 0.5f)
+                    scaleX = bounce.value
+                    scaleY = bounce.value
+                }
+                .clickable(onClick = onClockClick),
+        ) {
+            Text(
+                text = clock.hour,
+                style = digitStyle,
+                color = NexusColor.OnWallpaper,
+            )
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = clock.minute,
+                    style = digitStyle,
+                    color = NexusColor.Accent,
+                )
+                if (clock.meridiem.isNotEmpty()) {
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = clock.meridiem,
+                        style = NexusType.DateLine.copy(fontSize = (digitSize * 0.22f).sp),
+                        color = NexusColor.TextSecondary,
+                        modifier = Modifier.padding(bottom = (digitSize * 0.14f).dp),
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
         Text(
-            text = dateText,
+            text = clock.date,
             style = NexusType.DateLine,
             color = NexusColor.OnWallpaper,
         )
@@ -247,8 +294,14 @@ private fun ClockBlock(
 }
 
 /**
- * The favourites list plus the scrub strip, wired together: dragging the strip
- * filters the list to that letter's section and pushes rows left in a wave.
+ * The Home list and the scrub strip.
+ *
+ * At rest the list is the pinned favourites and nothing else — Home is not an
+ * app drawer. Touching the A–Z strip switches it to the full alphabetical run
+ * so the user can reach anything, and releasing leaves them parked in that
+ * section rather than snapping back. Leaving Home and returning restores the
+ * favourites, which is what [resetToken] is for: the caller bumps it whenever
+ * the Home page stops being the settled page.
  */
 @Composable
 private fun FavoritesWithScrub(
@@ -256,6 +309,7 @@ private fun FavoritesWithScrub(
     favorites: List<AppEntry>,
     settings: NexusSettings,
     columns: Int,
+    resetToken: Int,
     modifier: Modifier = Modifier,
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPressApp: (AppEntry) -> Unit,
@@ -266,25 +320,22 @@ private fun FavoritesWithScrub(
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
 
-    // Favourites first, then everything alphabetically — one uniform list, no
-    // header or divider between the two halves.
-    //
-    // Pinned apps are lifted out of the A–Z run rather than repeated in it. They
-    // are already in [apps], and a lazy list throws outright on a duplicate key;
-    // with no divider between the halves, the same app twice would read as a
-    // duplication bug anyway.
-    val rows = remember(apps, favorites) {
-        val pinned = favorites.mapTo(HashSet()) { it.key }
-        (favorites + apps.filterNot { it.key in pinned }).distinctBy { it.key }
-    }
+    // False is Home proper: favourites only. True is the browse state a scrub
+    // opens up, holding the full A–Z list.
+    var browsing by remember { mutableStateOf(false) }
 
-    // Index of the first row for each section letter, so a scrub can jump
-    // straight to it. Favourites occupy the rows before the A–Z run.
-    val letterAnchors = remember(rows, favorites) {
+    LaunchedEffect(resetToken) { browsing = false }
+
+    // Duplicate keys throw outright in a lazy list, and both lists are built
+    // from settings that could name the same package twice.
+    val pinnedRows = remember(favorites) { favorites.distinctBy { it.key } }
+    val allRows = remember(apps) { apps.distinctBy { it.key } }
+    val rows = if (browsing) allRows else pinnedRows
+
+    // Index of the first row for each section letter in the browse list.
+    val letterAnchors = remember(allRows) {
         buildMap {
-            for (index in favorites.size until rows.size) {
-                putIfAbsent(rows[index].sortLetter, index)
-            }
+            allRows.forEachIndexed { index, app -> putIfAbsent(app.sortLetter, index) }
         }
     }
 
@@ -292,11 +343,10 @@ private fun FavoritesWithScrub(
         AZ_LETTERS.filter { it == STAR_LETTER || it in letterAnchors }
     }
 
-    /** First row at or after [letter]; the star and unknown letters go to the top. */
+    /** First row at or after [letter]; unknown letters fall forward to the next real one. */
     fun anchorFor(letter: Char): Int {
         if (letter == STAR_LETTER) return 0
         letterAnchors[letter]?.let { return it }
-        // The touched letter has no apps — fall forward to the next one that does.
         return AZ_LETTERS
             .dropWhile { it != letter }
             .firstNotNullOfOrNull { letterAnchors[it] }
@@ -304,21 +354,27 @@ private fun FavoritesWithScrub(
     }
 
     // The pin hint occupies a lazy slot of its own, so every anchor shifts by
-    // one while it is showing.
-    val headerRows = if (favorites.isEmpty()) 1 else 0
+    // one while it is showing. It only shows at rest, and scrubbing leaves rest.
+    val showPinHint = !browsing && pinnedRows.isEmpty()
 
     suspend fun scrollTo(rowIndex: Int) {
-        val index = rowIndex + headerRows
-        if (columns > 1) gridState.scrollToItem(index) else listState.scrollToItem(index)
+        if (columns > 1) gridState.scrollToItem(rowIndex) else listState.scrollToItem(rowIndex)
+    }
+
+    // Coming back to favourites from anywhere down the alphabet, the saved
+    // scroll position is meaningless — start at the top.
+    LaunchedEffect(browsing) {
+        if (!browsing) scrollTo(0)
     }
 
     // Where the list sat before the scrub began, so a cancelled gesture can put
     // it back rather than dumping the user at the top. Null means this gesture
     // has not captured a resting position yet.
-    var preScrub by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var preScrub by remember { mutableStateOf<ScrubOrigin?>(null) }
 
-    LaunchedEffect(scrub.activeLetter) {
+    LaunchedEffect(scrub.activeLetter, browsing) {
         val letter = scrub.activeLetter ?: return@LaunchedEffect
+        if (letter == STAR_LETTER) return@LaunchedEffect
         scrollTo(anchorFor(letter))
     }
 
@@ -340,7 +396,7 @@ private fun FavoritesWithScrub(
                         horizontalArrangement = Arrangement.spacedBy(44.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        if (favorites.isEmpty()) {
+                        if (showPinHint) {
                             item(span = { GridItemSpan(maxLineSpan) }) { PinHint() }
                         }
                         gridItems(rows, key = { it.key }) { app ->
@@ -358,7 +414,7 @@ private fun FavoritesWithScrub(
                         contentPadding = contentPadding,
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        if (favorites.isEmpty()) {
+                        if (showPinHint) {
                             item { PinHint() }
                         }
                         items(rows, key = { it.key }) { app ->
@@ -377,37 +433,50 @@ private fun FavoritesWithScrub(
                 letters = presentLetters,
                 state = scrub,
                 modifier = Modifier.padding(end = 4.dp),
-                onLetterChanged = {
+                onLetterChanged = { letter ->
                     // Capture the resting position on the first letter of a
                     // gesture, before any preview scrolling moves the list.
                     if (preScrub == null) {
-                        preScrub = if (columns > 1) {
-                            gridState.firstVisibleItemIndex to
+                        preScrub = ScrubOrigin(
+                            browsing = browsing,
+                            firstVisibleIndex = if (columns > 1) {
+                                gridState.firstVisibleItemIndex
+                            } else {
+                                listState.firstVisibleItemIndex
+                            },
+                            firstVisibleOffset = if (columns > 1) {
                                 gridState.firstVisibleItemScrollOffset
-                        } else {
-                            listState.firstVisibleItemIndex to
+                            } else {
                                 listState.firstVisibleItemScrollOffset
-                        }
+                            },
+                        )
                     }
+                    // The star is the way back: it means favourites, not the
+                    // top of the alphabet.
+                    browsing = letter != STAR_LETTER
                 },
-                onReleased = { committed ->
+                onReleased = {
                     // The preview scroll already put the list where it belongs;
-                    // committing just means leaving it there.
+                    // committing just means leaving it there — including the
+                    // browse list itself, which stays up until Home is re-entered.
                     preScrub = null
-                    if (committed != null) {
-                        scope.launch { scrollTo(anchorFor(committed)) }
-                    }
                 },
                 onCancelled = {
-                    val resting = preScrub
+                    val origin = preScrub
                     preScrub = null
-                    if (resting != null) {
+                    if (origin != null) {
+                        browsing = origin.browsing
                         scope.launch {
-                            val (index, offset) = resting
                             if (columns > 1) {
-                                gridState.scrollToItem(index, offset)
+                                gridState.scrollToItem(
+                                    origin.firstVisibleIndex,
+                                    origin.firstVisibleOffset,
+                                )
                             } else {
-                                listState.scrollToItem(index, offset)
+                                listState.scrollToItem(
+                                    origin.firstVisibleIndex,
+                                    origin.firstVisibleOffset,
+                                )
                             }
                         }
                     }
@@ -429,6 +498,13 @@ private fun FavoritesWithScrub(
     }
 }
 
+/** What the list looked like before a scrub, so a cancelled gesture can undo it. */
+private data class ScrubOrigin(
+    val browsing: Boolean,
+    val firstVisibleIndex: Int,
+    val firstVisibleOffset: Int,
+)
+
 /**
  * Shown only while no favourites are pinned. Deliberately a bare line in the
  * date-line font — not a card, not a placeholder row — and it disappears for
@@ -445,10 +521,7 @@ private fun PinHint() {
     )
 }
 
-/**
- * One favourites row: blush squircle icon plus the app name. During a scrub it
- * slides left by the Gaussian wave amount for its distance from the finger.
- */
+/** One list row: blush squircle icon plus the app name. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FavoriteRow(

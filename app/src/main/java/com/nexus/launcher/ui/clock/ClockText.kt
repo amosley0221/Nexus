@@ -18,8 +18,18 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * The clock split into its parts rather than one formatted string: Home stacks
+ * the hour over the minutes in different colours, so it needs them separately.
+ * [meridiem] is empty when the device is on 24-hour time.
+ */
 @Immutable
-data class ClockText(val time: String, val date: String)
+data class ClockText(
+    val hour: String,
+    val minute: String,
+    val meridiem: String,
+    val date: String,
+)
 
 /**
  * Live clock and date line. Driven by the system's ACTION_TIME_TICK broadcast
@@ -52,9 +62,13 @@ fun rememberClockText(): ClockText {
 
 private fun buildClockText(context: Context): ClockText {
     val now = Date()
-    val timePattern = if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
-    val time = SimpleDateFormat(timePattern, Locale.getDefault()).format(now)
-    val day = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(now)
+    val locale = Locale.getDefault()
+    val is24Hour = DateFormat.is24HourFormat(context)
+
+    val hour = SimpleDateFormat(if (is24Hour) "HH" else "h", locale).format(now)
+    val minute = SimpleDateFormat("mm", locale).format(now)
+    val meridiem = if (is24Hour) "" else SimpleDateFormat("a", locale).format(now)
+    val day = SimpleDateFormat("EEE, MMM d", locale).format(now)
 
     val battery = batteryPercent(context)
     val date = buildString {
@@ -64,7 +78,7 @@ private fun buildClockText(context: Context): ClockText {
             append("$battery%")
         }
     }
-    return ClockText(time = time, date = date)
+    return ClockText(hour = hour, minute = minute, meridiem = meridiem, date = date)
 }
 
 private fun batteryPercent(context: Context): Int? {

@@ -121,8 +121,7 @@ class NexusLauncherActivity : FragmentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         LauncherScreen(
                             viewModel = viewModel,
-                            clockText = clock.time,
-                            dateText = clock.date,
+                            clock = clock,
                             host = host,
                             modifier = Modifier.fillMaxSize(),
                         )

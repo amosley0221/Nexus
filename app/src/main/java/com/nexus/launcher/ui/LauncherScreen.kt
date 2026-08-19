@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ import com.nexus.launcher.domain.PageKind
 import com.nexus.launcher.domain.RomEntry
 import com.nexus.launcher.NexusApp
 import com.nexus.launcher.integration.notifications.NexusNotificationListener
+import com.nexus.launcher.ui.clock.ClockText
 import com.nexus.launcher.ui.home.HomePage
 import com.nexus.launcher.ui.home.NotificationsOverscroll
 import com.nexus.launcher.ui.home.PageJump
@@ -69,8 +71,7 @@ enum class Overlay { None, Search, Notifications }
 @Composable
 fun LauncherScreen(
     viewModel: LauncherViewModel,
-    clockText: String,
-    dateText: String,
+    clock: ClockText,
     host: LauncherHost,
     modifier: Modifier = Modifier,
 ) {
@@ -181,10 +182,23 @@ fun LauncherScreen(
         }
     }
 
+    // Home is favourites-only at rest; scrubbing the A-Z strip opens the full
+    // app list and leaves it up. Bumping this token drops it back to
+    // favourites, so a return to Home always looks like Home. It fires when
+    // Home stops being the settled page rather than when it becomes one, so
+    // the list collapses off-screen instead of visibly reshuffling on arrival.
+    var homeResetToken by remember { mutableIntStateOf(0) }
+    LaunchedEffect(pagerState, homeIndex) {
+        snapshotFlow { pagerState.settledPage }.collect { settled ->
+            if (settled != homeIndex) homeResetToken++
+        }
+    }
+
     // HOME press returns to the Home page rather than exiting.
     LaunchedEffect(host.homePressCount) {
         if (host.homePressCount > 0) {
             overlay = Overlay.None
+            homeResetToken++
             pagerState.animateScrollToPage(homeIndex)
         }
     }
@@ -228,8 +242,8 @@ fun LauncherScreen(
                         apps = apps,
                         favorites = favorites,
                         settings = settings,
-                        clockText = clockText,
-                        dateText = dateText,
+                        clock = clock,
+                        resetToken = homeResetToken,
                         claudeLine = host.claudeLine,
                         onLaunch = { entry, bounds -> host.launchApp(entry, bounds) },
                         onLongPressApp = { host.openAppOptions(it) },
