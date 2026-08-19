@@ -265,7 +265,15 @@ private fun FavoritesWithScrub(
 
     // Favourites first, then everything alphabetically — one uniform list, no
     // header or divider between the two halves.
-    val rows = remember(apps, favorites) { favorites + apps }
+    //
+    // Pinned apps are lifted out of the A–Z run rather than repeated in it. They
+    // are already in [apps], and a lazy list throws outright on a duplicate key;
+    // with no divider between the halves, the same app twice would read as a
+    // duplication bug anyway.
+    val rows = remember(apps, favorites) {
+        val pinned = favorites.mapTo(HashSet()) { it.key }
+        (favorites + apps.filterNot { it.key in pinned }).distinctBy { it.key }
+    }
 
     // Index of the first row for each section letter, so a scrub can jump
     // straight to it. Favourites occupy the rows before the A–Z run.

@@ -62,25 +62,27 @@ fun LauncherOverlay(
     val appRepository = remember(context) {
         (context.applicationContext as NexusApp).appRepository
     }
-    val discoverState by remember(context) {
-        (context.applicationContext as NexusApp).discoverOverlay.state
-    }.collectAsStateWithLifecycle()
+    val discoverOverlay = remember(context) {
+        (context.applicationContext as NexusApp).discoverOverlay
+    }
+    val discoverState by discoverOverlay.state.collectAsStateWithLifecycle()
+    val discoverDiag by discoverOverlay.diagnostics.collectAsStateWithLifecycle()
 
     val discoverDiagnostics = buildString {
         append(if (discoverState.companionInstalled) "companion ✓" else "companion ✗")
         append(if (discoverState.bridgeBound) " · bridge ✓" else " · bridge ✗")
         append(if (discoverState.overlayConnected) " · google ✓" else " · google ✗")
-        append(if (discoverState.windowAttached) " · window ✓" else " · window ✗")
+        append(if (discoverDiag.windowAttached) " · window ✓" else " · window ✗")
         append(if (discoverState.hasContent) " · content ✓" else " · content ✗")
         append("\nstatus=")
-        append(if (discoverState.lastStatus < 0) "never" else discoverState.lastStatus.toString())
+        append(if (discoverDiag.lastStatus < 0) "never" else discoverDiag.lastStatus.toString())
         append(" · scroll=")
         append(
-            if (discoverState.lastReportedScroll < 0f) "never"
-            else "%.2f".format(discoverState.lastReportedScroll)
+            if (discoverDiag.lastReportedScroll < 0f) "never"
+            else "%.2f".format(discoverDiag.lastReportedScroll)
         )
         append(" · activity=")
-        append(discoverState.lastActivityState)
+        append(discoverDiag.lastActivityState)
         discoverState.unavailableReason?.let {
             append("\n")
             append(it)

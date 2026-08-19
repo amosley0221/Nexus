@@ -26,10 +26,20 @@ data class DiscoverOverlayState(
     val hasContent: Boolean = false,
     /** Why the feed is unavailable, or null when it is working. */
     val unavailableReason: String? = null,
+) {
+    /** True only when the feed can actually be shown. */
+    val isUsable: Boolean get() = bridgeBound && overlayConnected
+}
 
-    // Diagnostics. This is a reverse-engineered protocol against an app that
-    // gives no error feedback — when the feed does not appear, these are the
-    // only way to tell which step failed. Surfaced on the companion's screen.
+/**
+ * Diagnostics for a reverse-engineered protocol that reports no errors of its
+ * own. Split out from [DiscoverOverlayState] deliberately: the scroll echo
+ * updates on every frame of an overlay animation, and folding that into the
+ * state the launcher shell observes would recompose the whole screen at frame
+ * rate. Only the settings screen reads this.
+ */
+@Immutable
+data class DiscoverOverlayDiagnostics(
     /** The Google app accepted the launcher's window. */
     val windowAttached: Boolean = false,
     /** Last status bitmask the Google app reported. -1 = never reported. */
@@ -38,10 +48,7 @@ data class DiscoverOverlayState(
     val lastReportedScroll: Float = -1f,
     /** Started/resumed bits last sent to the Google app. */
     val lastActivityState: Int = 0,
-) {
-    /** True only when the feed can actually be shown. */
-    val isUsable: Boolean get() = bridgeBound && overlayConnected
-}
+)
 
 /**
  * Launcher-side half of the Discover bridge.
@@ -59,6 +66,9 @@ class DiscoverOverlayController(private val context: Context) {
 
     private val _state = MutableStateFlow(DiscoverOverlayState())
     val state: StateFlow<DiscoverOverlayState> = _state.asStateFlow()
+
+    private val _diagnostics = MutableStateFlow(DiscoverOverlayDiagnostics())
+    val diagnostics: StateFlow<DiscoverOverlayDiagnostics> = _diagnostics.asStateFlow()
 
     private var overlay: INexusOverlay? = null
     private var bound = false
@@ -83,14 +93,12 @@ class DiscoverOverlayController(private val context: Context) {
     private val callback = object : INexusOverlayCallback.Stub() {
         override fun overlayScrollChanged(progress: Float) {
             _overlayProgress.value = progress
-            _state.value = _state.value.copy(lastReportedScroll = progress)
+            _diagnostics.value = _diagnostics.value.copy(lastReportedScroll = progress)
         }
 
         override fun overlayStatusChanged(status: Int) {
-            _state.value = _state.value.copy(
-                hasContent = status and STATUS_ATTACHED != 0,
-                lastStatus = status,
-            )
+            _state.value = _state.value.copy(hasContent = status and STATUS_ATTACHED != 0)
+            _diagnostics.value = _diagnostics.value.copy(lastStatus = status)
         }
 
         override fun companionStateChanged(connected: Boolean, detail: String?) {
@@ -207,12 +215,12 @@ class DiscoverOverlayController(private val context: Context) {
                     ?: "The Google app did not accept the overlay window.",
             )
         }
-        _state.value = _state.value.copy(windowAttached = attached)
+        _diagnostics.value = _diagnostics.value.copy(windowAttached = attached)
     }
 
     private fun applyActivityState() {
         call { setActivityState(activityState) }
-        _state.value = _state.value.copy(lastActivityState = activityState)
+        _diagnostics.value = _diagnostics.value.copy(lastActivityState = activityState)
     }
 
     fun detachWindow(isChangingConfigurations: Boolean) {
