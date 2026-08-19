@@ -1,6 +1,7 @@
 package com.nexus.launcher.ui.home
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -450,6 +451,7 @@ private fun PinHint() {
  * One favourites row: blush squircle icon plus the app name. During a scrub it
  * slides left by the Gaussian wave amount for its distance from the finger.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FavoriteRow(
     app: AppEntry,
