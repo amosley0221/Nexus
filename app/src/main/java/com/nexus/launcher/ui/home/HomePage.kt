@@ -1,6 +1,7 @@
 package com.nexus.launcher.ui.home
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,7 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -456,22 +458,36 @@ private fun FavoriteRow(
     onLaunch: (AppEntry, androidx.compose.ui.geometry.Rect?) -> Unit,
     onLongPress: (AppEntry) -> Unit,
 ) {
-    var rowCenterY by remember { mutableFloatStateOf(0f) }
-    var bounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-
-    val waveDp = waveOffsetDp(rowCenterY, scrub.touchY, scrub.isScrubbing)
+    // Plain holders, deliberately not snapshot state. onPlaced fires on every
+    // layout pass, so writing observable state here made each visible row
+    // recompose on every frame of a scroll — the single biggest source of
+    // choppiness in the list. Nothing needs to recompose when a row moves; the
+    // wave is a draw-time transform and the bounds are only read on a tap.
+    val placement = remember { RowPlacement() }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .offset(x = waveDp.dp)
-            .onGloballyPositioned { coords ->
-                bounds = coords.boundsInWindow()
-                rowCenterY = coords.positionInParent().y + coords.size.height / 2f
+            .onPlaced { coords ->
+                placement.centerY = coords.positionInParent().y + coords.size.height / 2f
+                placement.bounds = coords.boundsInWindow()
             }
-            .clickable { onLaunch(app, bounds) }
+            // graphicsLayer over offset: the scrub state is read in the draw
+            // phase, so a moving wave invalidates the layer instead of
+            // recomposing and re-laying-out every row it touches.
+            .graphicsLayer {
+                translationX = waveOffsetDp(
+                    rowCenterY = placement.centerY,
+                    touchY = scrub.touchY,
+                    active = scrub.isScrubbing,
+                ) * density
+            }
+            .combinedClickable(
+                onClick = { onLaunch(app, placement.bounds) },
+                onLongClick = { onLongPress(app) },
+            )
             .padding(vertical = 6.dp),
     ) {
         AppIcon(
@@ -487,4 +503,10 @@ private fun FavoriteRow(
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+/** Where a row currently sits, held outside the snapshot system on purpose. */
+private class RowPlacement {
+    var centerY: Float = 0f
+    var bounds: androidx.compose.ui.geometry.Rect? = null
 }

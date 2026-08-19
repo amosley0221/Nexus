@@ -251,6 +251,11 @@ fun LauncherOverlay(
             val entry = route.entry
             val isFavorite = entry.key in settings.favorites
             val isLocked = entry.key in settings.lockedApps
+
+            // Read once per sheet: the query crosses a binder and the answer is
+            // only as fresh as the moment the sheet opened either way.
+            val shortcuts = remember(entry.key) { appRepository.shortcutsFor(entry) }
+
             OptionsSheet(
                 title = entry.label,
                 meta = entry.packageName,
@@ -259,6 +264,11 @@ fun LauncherOverlay(
                 onPrimary = {
                     onClose()
                     host.launchApp(entry, null)
+                },
+                shortcuts = shortcuts,
+                onShortcutClick = { shortcut ->
+                    onClose()
+                    appRepository.launchShortcut(shortcut)
                 },
                 actions = listOf(
                     SheetAction(

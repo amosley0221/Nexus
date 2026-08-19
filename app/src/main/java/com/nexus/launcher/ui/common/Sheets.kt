@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nexus.launcher.domain.AppShortcut
 import com.nexus.launcher.ui.theme.NexusColor
 import com.nexus.launcher.ui.theme.NexusRadius
 import com.nexus.launcher.ui.theme.NexusType
@@ -49,6 +50,8 @@ fun OptionsSheet(
     modifier: Modifier = Modifier,
     primaryLabel: String? = null,
     onPrimary: () -> Unit = {},
+    shortcuts: List<AppShortcut> = emptyList(),
+    onShortcutClick: (AppShortcut) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -105,6 +108,39 @@ fun OptionsSheet(
                         maxLines = 1,
                     )
                 }
+            }
+
+            // What the app itself publishes: the channels that are live, the
+            // conversations you were just in. Above the launcher's own actions
+            // because it is what you came here for.
+            if (shortcuts.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                shortcuts.forEach { shortcut ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onShortcutClick(shortcut) }
+                            .padding(vertical = 10.dp),
+                    ) {
+                        ShortcutIcon(shortcut = shortcut, size = 34.dp)
+                        Text(
+                            text = shortcut.label,
+                            style = NexusType.CardTitleSemi,
+                            color = NexusColor.TextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(NexusColor.Border)
+                )
             }
 
             Spacer(Modifier.height(10.dp))

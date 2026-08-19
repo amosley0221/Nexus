@@ -13,6 +13,7 @@ import android.os.UserHandle
 import android.provider.Settings
 import android.util.Log
 import com.nexus.launcher.domain.AppEntry
+import com.nexus.launcher.domain.AppShortcut
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,6 +62,7 @@ class AppRepository(private val context: Context) {
             .distinctBy { it.key }
             .sortedBy { it.label.lowercase() }
 
+        com.nexus.launcher.ui.common.IconCache.clear()
         _apps.value = entries
     }
 
@@ -133,6 +135,65 @@ class AppRepository(private val context: Context) {
                 context.startActivity(intent)
             }.onFailure { Log.w(TAG, "Could not launch ${entry.key}", it) }
         }
+    }
+
+    /**
+     * The shortcuts an app publishes about itself — the live channels under
+     * Twitch, the recent conversations under Messages.
+     *
+     * Only a launcher that is currently the default home app may read these, so
+     * this returns nothing until Nexus holds that role rather than failing.
+     */
+    fun shortcutsFor(entry: AppEntry, limit: Int = 6): List<AppShortcut> {
+        if (!runCatching { launcherApps.hasShortcutHostPermission() }.getOrDefault(false)) {
+            return emptyList()
+        }
+
+        val query = LauncherApps.ShortcutQuery()
+            .setPackage(entry.packageName)
+            .setQueryFlags(
+                LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
+                    LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                    LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED
+            )
+
+        val shortcuts = runCatching {
+            launcherApps.getShortcuts(query, Process.myUserHandle())
+        }.getOrNull().orEmpty()
+
+        return shortcuts
+            .asSequence()
+            .filter { it.isEnabled }
+            // Apps rank their own shortcuts; respect that order.
+            .sortedBy { it.rank }
+            .take(limit)
+            .map { shortcut ->
+                AppShortcut(
+                    id = shortcut.id,
+                    packageName = shortcut.`package`,
+                    label = (shortcut.longLabel ?: shortcut.shortLabel)?.toString().orEmpty(),
+                    icon = runCatching {
+                        launcherApps.getShortcutIconDrawable(
+                            shortcut,
+                            context.resources.displayMetrics.densityDpi,
+                        )
+                    }.getOrNull(),
+                )
+            }
+            .filter { it.label.isNotBlank() }
+            .toList()
+    }
+
+    fun launchShortcut(shortcut: AppShortcut, sourceBounds: Rect? = null) {
+        runCatching {
+            launcherApps.startShortcut(
+                shortcut.packageName,
+                shortcut.id,
+                sourceBounds,
+                null,
+                Process.myUserHandle(),
+            )
+        }.onFailure { Log.w(TAG, "Could not launch shortcut ${shortcut.id}", it) }
     }
 
     fun openAppInfo(entry: AppEntry) {

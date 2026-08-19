@@ -26,6 +26,19 @@ data class AppEntry(
             ?: '#'
 }
 
+/**
+ * A shortcut an app publishes about itself — a Twitch channel that is live, a
+ * conversation in Messages, a recent destination in Maps. Apps declare these
+ * statically in their manifest or push them dynamically at runtime.
+ */
+@Immutable
+data class AppShortcut(
+    val id: String,
+    val packageName: String,
+    val label: String,
+    val icon: Drawable?,
+)
+
 /** The pages the pager can show, in their default left-to-right order. */
 @Serializable
 enum class PageKind {
